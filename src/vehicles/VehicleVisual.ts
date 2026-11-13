@@ -17,6 +17,9 @@ export class VehicleVisual {
   private neonMats: THREE.MeshStandardMaterial[] = [];
   private tailMats: THREE.MeshStandardMaterial[] = [];
   private holoMats: THREE.MeshStandardMaterial[] = [];
+  private steedMats: THREE.MeshStandardMaterial[] = [];
+  private gallop: THREE.Object3D[] = [];
+  private stride = 0;
   private thrusters: THREE.Mesh[] = [];
   private underglow: THREE.PointLight;
   private headlight: THREE.SpotLight;
@@ -82,6 +85,15 @@ export class VehicleVisual {
             mat.emissiveIntensity = 4;
             mat.color.set(0x000000);
             this.neonMats.push(mat);
+          } else if (n.startsWith('Steed')) {
+            // holographic energy body: glowing, see-through
+            mat.emissive.set(c.colors.neon);
+            mat.emissiveIntensity = 1.2;
+            mat.color.set(0x000000);
+            mat.transparent = true;
+            mat.opacity = 0.62;
+            mat.depthWrite = false;
+            this.steedMats.push(mat);
           } else if (n.startsWith('TailLight')) {
             mat.emissive.set(0xff1030);
             mat.emissiveIntensity = 3;
@@ -107,6 +119,9 @@ export class VehicleVisual {
         });
       });
       this.body = model.getObjectByName('body') ?? null;
+      model.traverse((o) => {
+        if (o.name.startsWith('gallop')) this.gallop.push(o);
+      });
       this.wheelNodes = c.wheels.map((w) => (w.node ? model.getObjectByName(w.node) ?? null : null));
       for (const w of this.wheelNodes) if (w) w.rotation.order = 'YXZ';
       this.root.add(model);
@@ -144,10 +159,21 @@ export class VehicleVisual {
       this.body.rotation.z += (lean - this.body.rotation.z) * Math.min(1, dt * 6);
     }
 
+    // galloping legs: stride follows distance travelled, front and rear pairs out of phase
+    if (this.gallop.length) {
+      this.stride += v.forwardSpeed * dt * 0.55;
+      const amp = Math.min(0.75, 0.12 + Math.abs(v.forwardSpeed) * 0.03);
+      this.gallop.forEach((leg, i) => {
+        const front = leg.name.includes('_f');
+        leg.rotation.x = Math.sin(this.stride + (front ? 0 : 2.4) + (i % 2 ? 0.5 : 0)) * amp;
+      });
+    }
+
     const target = v.boosting ? 1 : 0;
     this.boostGlow += (target - this.boostGlow) * Math.min(1, dt * (target ? 14 : 4));
     const pulse = 1 + 0.08 * Math.sin(this.time * 9);
     for (const m of this.neonMats) m.emissiveIntensity = (3.6 + this.boostGlow * 6) * pulse;
+    for (const m of this.steedMats) m.emissiveIntensity = 1.1 + 0.25 * Math.sin(this.time * 5) + this.boostGlow * 2.5;
     for (const m of this.tailMats) m.emissiveIntensity = v.braking ? 12 : 3 + this.boostGlow * 3;
     for (const m of this.holoMats) m.emissiveIntensity = 1.4 + 0.5 * Math.sin(this.time * 2.3) + this.boostGlow * 1.5;
     this.underglow.intensity = (12 + this.boostGlow * 30) * pulse;
@@ -173,7 +199,7 @@ export class VehicleVisual {
       for (const m of mats) {
         const mat = m as THREE.MeshStandardMaterial;
         if (mat.name?.startsWith('Paint')) mat.color.set(paint);
-        else if (mat.name?.startsWith('Neon')) mat.emissive.set(neon);
+        else if (mat.name?.startsWith('Neon') || mat.name?.startsWith('Steed')) mat.emissive.set(neon);
         else if (mat.name?.startsWith('Accent')) mat.emissive.set(accent);
       }
     });

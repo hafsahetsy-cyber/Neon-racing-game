@@ -1,5 +1,4 @@
 import { Game } from './core/Game';
-import { cyberRickshaw } from './vehicles/configs/cyberRickshaw';
 
 async function boot() {
   const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -9,7 +8,7 @@ async function boot() {
   // Dev handle: lets tests and the console drive the game (e.g. __game.input.override = { throttle: 1 }).
   (window as unknown as { __game: Game }).__game = game;
   try {
-    await game.init(cyberRickshaw);
+    await game.init();
     game.start();
     loading.classList.add('done');
   } catch (err) {

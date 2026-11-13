@@ -1,0 +1,159 @@
+import { QUALITY, QUALITY_ORDER, type QualityLevel } from '../core/Quality';
+import type { VehicleConfig } from '../vehicles/VehicleConfig';
+
+export type Screen = 'title' | 'garage' | 'pause' | 'settings' | 'none';
+
+export interface MenuHost {
+  vehicles: VehicleConfig[];
+  currentVehicle(): VehicleConfig;
+  selectVehicle(cfg: VehicleConfig): Promise<void>;
+  setColors(paint: number, neon: number, accent: number): void;
+  drive(): void;
+  resume(): void;
+  toTitle(): void;
+  quality(): QualityLevel;
+  setQuality(q: QualityLevel): void;
+  volumes(): { music: number; sfx: number };
+  setVolumes(music: number, sfx: number): void;
+  raining(): boolean;
+  setRain(on: boolean): void;
+}
+
+const PAINTS = [0x12b8a6, 0xd4122e, 0x2a1a6e, 0xf2c200, 0xf5f5f0, 0x101014, 0xff6a13, 0x1560ff, 0x1fa34a, 0xb0126f];
+const NEONS = [0x00f0ff, 0xff2bd6, 0x7dff5a, 0xffa630, 0x7a5cff, 0xff3040, 0xffffff, 0xfff04a];
+const hex = (c: number) => '#' + c.toString(16).padStart(6, '0');
+
+/** Title screen, garage, pause and settings — plain DOM over the live 3D scene. */
+export class Menu {
+  screen: Screen = 'title';
+  private root: HTMLElement;
+  private back: Screen = 'title';
+
+  constructor(parent: HTMLElement, private host: MenuHost) {
+    this.root = document.createElement('div');
+    this.root.className = 'menu';
+    parent.appendChild(this.root);
+    this.root.addEventListener('click', (e) => {
+      const t = (e.target as HTMLElement).closest('[data-act]') as HTMLElement | null;
+      if (t) this.act(t.dataset.act!, t.dataset.val);
+    });
+    this.root.addEventListener('input', (e) => {
+      const t = e.target as HTMLInputElement;
+      if (t.dataset.vol) {
+        const v = this.host.volumes();
+        if (t.dataset.vol === 'music') this.host.setVolumes(+t.value, v.sfx);
+        else this.host.setVolumes(v.music, +t.value);
+      }
+    });
+    window.addEventListener('keydown', (e) => {
+      if (this.screen === 'none') return;
+      if (e.code === 'Enter' && (this.screen === 'title' || this.screen === 'garage')) this.act('drive');
+      if (this.screen === 'garage' && (e.code === 'ArrowLeft' || e.code === 'KeyA')) this.act('prev');
+      if (this.screen === 'garage' && (e.code === 'ArrowRight' || e.code === 'KeyD')) this.act('next');
+    });
+    this.show('title');
+  }
+
+  show(screen: Screen) {
+    this.screen = screen;
+    this.root.dataset.screen = screen;
+    this.render();
+  }
+
+  private act(act: string, val?: string) {
+    const h = this.host;
+    const list = h.vehicles;
+    const i = list.indexOf(h.currentVehicle());
+    switch (act) {
+      case 'drive': this.show('none'); h.drive(); break;
+      case 'resume': this.show('none'); h.resume(); break;
+      case 'garage': this.back = this.screen; this.show('garage'); break;
+      case 'settings': this.back = this.screen; this.show('settings'); break;
+      case 'back': this.show(this.back === 'settings' || this.back === 'garage' ? 'title' : this.back); break;
+      case 'title': h.toTitle(); this.show('title'); break;
+      case 'prev': void h.selectVehicle(list[(i + list.length - 1) % list.length]).then(() => this.render()); break;
+      case 'next': void h.selectVehicle(list[(i + 1) % list.length]).then(() => this.render()); break;
+      case 'paint': { const c = h.currentVehicle().colors; h.setColors(+val!, c.neon, c.accent); this.render(); break; }
+      case 'neon': { const c = h.currentVehicle().colors; h.setColors(c.paint, +val!, c.accent); this.render(); break; }
+      case 'accent': { const c = h.currentVehicle().colors; h.setColors(c.paint, c.neon, +val!); this.render(); break; }
+      case 'quality': h.setQuality(val as QualityLevel); this.render(); break;
+      case 'rain': h.setRain(!h.raining()); this.render(); break;
+    }
+  }
+
+  private render() {
+    const h = this.host;
+    if (this.screen === 'none') {
+      this.root.innerHTML = '';
+      return;
+    }
+    if (this.screen === 'title') {
+      this.root.innerHTML = `
+        <div class="title">
+          <div class="logo">NEON<span>CRUISE</span></div>
+          <div class="city">NEO KARACHI · SADDAR · 2099</div>
+          <div class="btns">
+            <button class="btn primary" data-act="drive">DRIVE</button>
+            <button class="btn" data-act="garage">GARAGE</button>
+            <button class="btn" data-act="settings">SETTINGS</button>
+          </div>
+          <div class="hint">ENTER to drive · no timer, no rules — just cruise</div>
+        </div>`;
+      return;
+    }
+    if (this.screen === 'pause') {
+      this.root.innerHTML = `
+        <div class="panel centre">
+          <h2>PAUSED</h2>
+          <button class="btn primary" data-act="resume">RESUME</button>
+          <button class="btn" data-act="garage">GARAGE</button>
+          <button class="btn" data-act="settings">SETTINGS</button>
+          <button class="btn" data-act="title">MAIN MENU</button>
+        </div>`;
+      return;
+    }
+    if (this.screen === 'settings') {
+      const v = h.volumes();
+      this.root.innerHTML = `
+        <div class="panel centre wide">
+          <h2>SETTINGS</h2>
+          <label>GRAPHICS</label>
+          <div class="row">${QUALITY_ORDER.map((q) => `<button class="chip ${q === h.quality() ? 'on' : ''}" data-act="quality" data-val="${q}">${QUALITY[q].label}</button>`).join('')}</div>
+          <label>MUSIC</label><input type="range" min="0" max="1" step="0.05" value="${v.music}" data-vol="music" />
+          <label>ENGINE &amp; EFFECTS</label><input type="range" min="0" max="1" step="0.05" value="${v.sfx}" data-vol="sfx" />
+          <label>WEATHER</label>
+          <div class="row"><button class="chip ${h.raining() ? '' : 'on'}" data-act="rain">CLEAR</button><button class="chip ${h.raining() ? 'on' : ''}" data-act="rain">MONSOON</button></div>
+          <button class="btn" data-act="back">BACK</button>
+        </div>`;
+      return;
+    }
+    // garage
+    const c = h.currentVehicle();
+    const stat = (label: string, v: number) =>
+      `<div class="stat"><span>${label}</span><div class="bar"><i style="width:${v * 10}%"></i></div></div>`;
+    const sw = (act: string, list: number[], cur: number) =>
+      list.map((x) => `<button class="sw ${x === cur ? 'on' : ''}" style="--c:${hex(x)}" data-act="${act}" data-val="${x}" aria-label="${act} ${hex(x)}"></button>`).join('');
+    const kmh = Math.round(c.engine.topSpeed * 3.6);
+    this.root.innerHTML = `
+      <div class="garage-top"><h2>GARAGE</h2><div class="count">${h.vehicles.indexOf(c) + 1} / ${h.vehicles.length}</div></div>
+      <button class="arrow left" data-act="prev" aria-label="Previous vehicle">◀</button>
+      <button class="arrow right" data-act="next" aria-label="Next vehicle">▶</button>
+      <div class="garage-panel">
+        <div class="vinfo">
+          <div class="vname">${c.name}</div>
+          <div class="vtag">${c.tagline}</div>
+          <div class="vspeed">${kmh} <small>KM/H TOP SPEED</small></div>
+          ${stat('SPEED', c.stats.speed)}${stat('ACCEL', c.stats.accel)}${stat('HANDLING', c.stats.handling)}${stat('DRIFT', c.stats.drift)}
+        </div>
+        <div class="vcolors">
+          <label>PAINT</label><div class="row">${sw('paint', PAINTS, c.colors.paint)}</div>
+          <label>NEON</label><div class="row">${sw('neon', NEONS, c.colors.neon)}</div>
+          <label>ACCENT</label><div class="row">${sw('accent', NEONS, c.colors.accent)}</div>
+          <div class="row end">
+            <button class="btn" data-act="back">BACK</button>
+            <button class="btn primary" data-act="drive">DRIVE</button>
+          </div>
+        </div>
+      </div>`;
+  }
+}

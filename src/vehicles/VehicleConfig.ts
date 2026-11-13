@@ -25,6 +25,8 @@ export interface VehicleConfig {
   chassis: { halfExtents: [number, number, number]; center: [number, number, number] };
   /** Centre of mass height above the ground origin. Lower = more stable. */
   comHeight: number;
+  /** Fore/aft centre of mass (negative = forward). Keep it between the axles. */
+  comZ?: number;
   wheels: WheelConfig[];
   suspension: { travel: number; frequency: number; damping: number };
   engine: {
@@ -60,4 +62,6 @@ export interface VehicleConfig {
   colors: { paint: number; neon: number; accent: number };
   /** 0..10 values shown in the garage. */
   stats: { speed: number; accel: number; handling: number; drift: number };
+  /** Chase-camera distance multiplier for long vehicles. */
+  cameraDistance?: number;
 }

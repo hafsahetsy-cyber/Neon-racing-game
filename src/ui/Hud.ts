@@ -130,6 +130,10 @@ export class Hud {
     g.shadowBlur = 0;
   }
 
+  setVisible(on: boolean) {
+    this.root.classList.toggle('off', !on);
+  }
+
   toast(text: string) {
     this.toastEl.textContent = text;
     this.toastEl.classList.add('show');

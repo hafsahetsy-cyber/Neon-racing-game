@@ -116,7 +116,7 @@ export class Vehicle {
     };
     const col = RAPIER.ColliderDesc.cuboid(hx, hy, hz)
       .setTranslation(c.chassis.center[0], c.chassis.center[1], c.chassis.center[2])
-      .setMassProperties(c.mass, { x: 0, y: c.comHeight, z: 0 }, inertia, { x: 0, y: 0, z: 0, w: 1 })
+      .setMassProperties(c.mass, { x: 0, y: c.comHeight, z: c.comZ ?? 0 }, inertia, { x: 0, y: 0, z: 0, w: 1 })
       .setFriction(0.15)
       .setRestitution(0.15)
       .setActiveEvents(RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS)
@@ -326,7 +326,10 @@ export class Vehicle {
         if (locked) mu *= c.grip.handbrake;
         else {
           // once the tail steps out, it stays out — but stays controllable
-          const sliding = THREE.MathUtils.smoothstep(slipAngle, 0.14, 0.42);
+          // hysteresis: an established drift keeps sliding at shallower angles than it took to start one
+          const sliding = this.drifting
+            ? THREE.MathUtils.smoothstep(slipAngle, 0.04, 0.2)
+            : THREE.MathUtils.smoothstep(slipAngle, 0.14, 0.42);
           // the slide is only sustained while the driver keeps steering into the turn
           const sustain = clamp(-Math.sign(this.driftAngle) * this.steer, 0, 1);
           const hold = 0.12 + 0.88 * sustain;

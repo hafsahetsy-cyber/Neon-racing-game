@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { Vehicle } from '../vehicles/Vehicle';
 
-export type CameraMode = 'chase' | 'hood' | 'cinematic';
+export type CameraMode = 'chase' | 'hood' | 'cinematic' | 'showroom';
 export const CAMERA_MODES: CameraMode[] = ['chase', 'hood', 'cinematic'];
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -26,6 +26,11 @@ export class CameraRig {
 
   constructor(readonly camera: THREE.PerspectiveCamera) {}
 
+  /** Jump straight to the new mode's framing instead of easing from the old one. */
+  snap() {
+    this.initialised = false;
+  }
+
   cycle(): CameraMode {
     this.mode = CAMERA_MODES[(CAMERA_MODES.indexOf(this.mode) + 1) % CAMERA_MODES.length];
     this.initialised = false;
@@ -40,7 +45,7 @@ export class CameraRig {
     const boostK = v.boosting ? 1 : 0;
 
     // FOV widens with speed, kicks on boost
-    const fovBase = this.mode === 'hood' ? 72 : 60;
+    const fovBase = this.mode === 'hood' ? 72 : this.mode === 'showroom' ? 46 : 60;
     const fovTarget = fovBase + 20 * Math.pow(Math.min(1.2, sNorm), 1.4) + boostK * 7;
     this.fov += (fovTarget - this.fov) * Math.min(1, dt * (boostK ? 6 : 3));
     cam.fov = this.fov;
@@ -57,7 +62,7 @@ export class CameraRig {
       if (velDir.lengthSq() > 16 && v.forwardSpeed > 0) target.lerp(velDir.normalize(), 0.45).normalize();
       this.heading.lerp(target, Math.min(1, dt * 4.5)).normalize();
 
-      const dist = 6.2 - 1.5 * Math.min(1, sNorm) + boostK * 0.5;
+      const dist = (6.2 - 1.5 * Math.min(1, sNorm) + boostK * 0.5) * (v.config.cameraDistance ?? 1);
       const height = 2.35 - 0.35 * Math.min(1, sNorm);
       const desired = this._b.copy(v.position).addScaledVector(this.heading, -dist).addScaledVector(UP, height);
       desired.y = Math.max(desired.y, 0.6);
@@ -85,15 +90,17 @@ export class CameraRig {
       // lean into corners a touch
       cam.rotateZ(-v.steer * 0.025 * Math.min(1, sNorm * 2) - v.driftAngle * 0.04);
     } else if (this.mode === 'hood') {
-      const p = this._b.set(0, 1.25, -0.55).applyQuaternion(v.quaternion).add(v.position);
+      const hl = v.config.fx.headlight;
+      const p = this._b.set(0, Math.max(1.05, hl[1] + 0.45), hl[2] - 0.35).applyQuaternion(v.quaternion).add(v.position);
       cam.position.copy(p);
       cam.up.copy(v.up);
       cam.lookAt(this._c.copy(p).addScaledVector(v.forward, 10).addScaledVector(v.up, -0.4));
       this.initialised = true;
     } else {
       // cinematic: slow low orbit
-      this.orbit += dt * 0.35;
-      const r = 7.5 + sNorm * 2;
+      const show = this.mode === 'showroom';
+      this.orbit += dt * (show ? 0.22 : 0.35);
+      const r = show ? 5.2 + v.config.chassis.halfExtents[2] * 1.1 : 7.5 + sNorm * 2;
       const desired = this._b
         .copy(v.position)
         .add(this._c.set(Math.cos(this.orbit) * r, 1.1 + 0.9 * Math.sin(this.orbit * 0.7) + 0.9, Math.sin(this.orbit) * r));

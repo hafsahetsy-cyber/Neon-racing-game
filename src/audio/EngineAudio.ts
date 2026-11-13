@@ -22,6 +22,8 @@ export class EngineAudio {
   private hornGain!: GainNode;
   private rainGain!: GainNode;
   muted = false;
+  /** 0..1 effects volume (settings menu). */
+  volume = 0.7;
 
   /** Must be called from a user gesture. */
   start() {
@@ -136,15 +138,22 @@ export class EngineAudio {
     const t = ctx.currentTime;
     const a = v.config.audio;
     const set = (p: AudioParam, val: number, tc = 0.05) => p.setTargetAtTime(val, t, tc);
-    set(this.master.gain, this.muted || paused ? 0 : 0.5, 0.08);
+    set(this.master.gain, this.muted || paused ? 0 : 0.7 * this.volume, 0.08);
+    // each vehicle has its own engine voice
+    const ch = a.character;
+    const o1: OscillatorType = ch === 'electric' ? 'triangle' : 'sawtooth';
+    const o2: OscillatorType = ch === 'electric' ? 'sine' : ch === 'v8' ? 'sawtooth' : 'square';
+    if (this.osc1.type !== o1) this.osc1.type = o1;
+    if (this.osc2.type !== o2) this.osc2.type = o2;
+    const harm = ch === 'electric' ? 3.0 : ch === 'v8' ? 1.5 : ch === 'turbine' ? 4.02 : 2.01;
 
     const hz = a.idleHz + (a.maxHz - a.idleHz) * v.rpm * (v.boosting ? 1.12 : 1);
     set(this.osc1.frequency, hz);
-    set(this.osc2.frequency, hz * 2.01);
+    set(this.osc2.frequency, hz * harm);
     set(this.sub.frequency, hz * 0.5);
     // two-stroke: strong chop at low revs smoothing into a buzz at the top
-    set(this.lfo.frequency, a.character === 'twostroke' ? hz * 0.5 : hz * 0.25);
-    set(this.lfoDepth.gain, a.character === 'twostroke' ? 0.5 - 0.25 * v.rpm : 0.15);
+    set(this.lfo.frequency, ch === 'twostroke' ? hz * 0.5 : ch === 'v8' ? hz * 0.25 : 6);
+    set(this.lfoDepth.gain, ch === 'twostroke' ? 0.5 - 0.25 * v.rpm : ch === 'v8' ? 0.3 : 0.05);
     set(this.engineFilter.frequency, 350 + 2600 * v.rpm * (0.45 + 0.55 * v.throttle) + (v.boosting ? 1200 : 0));
     set(this.engineGain.gain, 0.16 + 0.2 * v.throttle + 0.08 * v.rpm);
 

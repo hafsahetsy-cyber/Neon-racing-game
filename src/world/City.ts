@@ -6,6 +6,7 @@ import { RoadGrid } from './city/RoadGrid';
 import { buildBuildings } from './city/buildings';
 import { Occupancy, buildProps } from './city/props';
 import { buildRoads, drawMiniMap } from './city/roads';
+import { buildStreetLife } from './city/streetlife';
 import { Traffic } from './city/traffic';
 import type { CityDefinition, CityMap } from './city/types';
 import { makeSky, makeTowerMaterial } from './materials';
@@ -91,7 +92,14 @@ export async function buildCity(world: RAPIER.World, quality: QualitySettings, d
   }
 
   // ---------------------------------------------------------------- streets, buildings, street life
-  group.add(buildRoads(map.roads, grid));
+  const roadGroup = buildRoads(map.roads, grid);
+  group.add(roadGroup);
+  const roadMats: THREE.MeshStandardMaterial[] = [];
+  roadGroup.traverse((o) => {
+    const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
+    if (m && m.isMeshStandardMaterial && !roadMats.includes(m)) roadMats.push(m);
+  });
+  const dry = roadMats.map((m) => ({ r: m.roughness, e: m.envMapIntensity }));
   const buildings = buildBuildings(map.buildings, def, world, fogColor, fogDensity);
   group.add(buildings.group);
   const occ = new Occupancy(map);
@@ -99,6 +107,8 @@ export async function buildCity(world: RAPIER.World, quality: QualitySettings, d
   group.add(props.group);
   const traffic = new Traffic(map.roads, def, world, Math.round(90 * Math.min(1.3, quality.particles + 0.25)));
   group.add(traffic.group);
+  const life = buildStreetLife(map, grid, occ, world, quality, def.streetLight);
+  group.add(life.group);
 
   // ---------------------------------------------------------------- far skyline + sky + light
   const towerMat = makeTowerMaterial(fogColor, fogDensity * 0.3);
@@ -156,6 +166,12 @@ export async function buildCity(world: RAPIER.World, quality: QualitySettings, d
     minimap,
     attribution: map.attribution,
     roadNameAt: (x, z) => grid.nearest(x, z, 3)?.road.n ?? '',
+    setWet(k) {
+      roadMats.forEach((m, i) => {
+        m.roughness = THREE.MathUtils.lerp(dry[i].r, 0.16, k);
+        m.envMapIntensity = THREE.MathUtils.lerp(dry[i].e, 0.8, k);
+      });
+    },
     update(dt, time, focus, player) {
       buildings.material.uniforms.uTime.value = time;
       towerMat.uniforms.uTime.value = time;
@@ -163,6 +179,7 @@ export async function buildCity(world: RAPIER.World, quality: QualitySettings, d
       sky.position.copy(focus);
       props.update(time);
       traffic.update(dt, player ?? focus);
+      life.update(dt, time, player ?? focus);
       for (const a of animators) a(time);
     },
   };

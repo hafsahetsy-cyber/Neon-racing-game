@@ -2,6 +2,7 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three';
 import { EngineAudio } from '../audio/EngineAudio';
 import { PostFX } from '../effects/PostFX';
+import { Rain } from '../effects/Rain';
 import { VehicleFX } from '../effects/VehicleFX';
 import { Hud } from '../ui/Hud';
 import { Vehicle } from '../vehicles/Vehicle';
@@ -42,6 +43,8 @@ export class Game {
   private slowFrames = 0;
   private fastStart = 0;
   private roadTimer = 0;
+  private rain = new Rain(1400);
+  private baseFog = 0;
 
   constructor(private canvas: HTMLCanvasElement, uiRoot: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({
@@ -60,6 +63,10 @@ export class Game {
         case 'reset': this.vehicle.reset(); break;
         case 'camera': this.hud.toast(`CAMERA · ${this.rig.cycle().toUpperCase()}`); break;
         case 'help': this.hud.toggleHelp(); break;
+        case 'weather':
+          this.rain.target = this.rain.target > 0 ? 0 : 1;
+          this.hud.toast(this.rain.target ? 'WEATHER · MONSOON' : 'WEATHER · CLEAR');
+          break;
         case 'mute': this.hud.toast(this.audio.toggleMute() ? 'SOUND OFF' : 'SOUND ON'); break;
         case 'pause':
           this.paused = !this.paused;
@@ -91,6 +98,8 @@ export class Game {
     this.scene.add(this.world.group);
     this.scene.fog = new THREE.FogExp2(this.world.fogColor, this.world.fogDensity);
     this.scene.background = this.world.fogColor;
+    this.baseFog = this.world.fogDensity;
+    this.scene.add(this.rain.mesh);
 
     this.vehicle = new Vehicle(this.physics, vehicleConfig, this.world.spawn);
     this.visual = new VehicleVisual(vehicleConfig);
@@ -185,9 +194,14 @@ export class Game {
         this.hud.setRoadName(this.world.roadNameAt(this.vehicle.position.x, this.vehicle.position.z));
       }
       this.fx.update(dt, this.camera, this.renderer.domElement.height);
+      this.rain.update(dt, this.camera);
+      if (this.rain.amount > 0.005 || this.rain.target > 0) {
+        this.world.setWet?.(this.rain.amount);
+        (this.scene.fog as THREE.FogExp2).density = this.baseFog * (1 + 0.9 * this.rain.amount);
+      }
     }
     this.hud.update(dt, this.vehicle);
-    this.audio.update(this.vehicle, this.input.state.horn, this.paused);
+    this.audio.update(this.vehicle, this.input.state.horn, this.paused, this.rain.amount);
     this.post.render(this.paused ? 0 : dt, {
       speed: this.vehicle.speed / this.vehicle.config.engine.topSpeed,
       boosting: this.vehicle.boosting,

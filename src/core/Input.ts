@@ -8,7 +8,7 @@ export interface DriveInput {
   horn: boolean;
 }
 
-export type InputAction = 'reset' | 'camera' | 'help' | 'quality' | 'pause' | 'mute';
+export type InputAction = 'reset' | 'camera' | 'help' | 'quality' | 'pause' | 'mute' | 'weather';
 
 export class Input {
   readonly state: DriveInput = { steer: 0, throttle: 0, brake: 0, handbrake: false, boost: false, horn: false };
@@ -33,6 +33,7 @@ export class Input {
         case 'KeyH': this.emit('help'); break;
         case 'KeyG': this.emit('quality'); break;
         case 'KeyM': this.emit('mute'); break;
+        case 'KeyT': this.emit('weather'); break;
         case 'Escape': this.emit('pause'); break;
       }
     });

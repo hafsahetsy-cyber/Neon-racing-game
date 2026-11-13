@@ -20,6 +20,7 @@ export class EngineAudio {
   private boostGain!: GainNode;
   private boostFilter!: BiquadFilterNode;
   private hornGain!: GainNode;
+  private rainGain!: GainNode;
   muted = false;
 
   /** Must be called from a user gesture. */
@@ -113,6 +114,14 @@ export class EngineAudio {
     hornFilter.frequency.value = 2200;
     this.hornGain.connect(hornFilter).connect(this.master);
 
+    // --- rain: hiss on the roof and road
+    const rainFilter = ctx.createBiquadFilter();
+    rainFilter.type = 'highpass';
+    rainFilter.frequency.value = 2600;
+    this.rainGain = ctx.createGain();
+    this.rainGain.gain.value = 0;
+    noise.connect(rainFilter).connect(this.rainGain).connect(this.master);
+
     for (const n of [this.osc1, this.osc2, this.sub, this.lfo, noise]) n.start();
   }
 
@@ -121,7 +130,7 @@ export class EngineAudio {
     return this.muted;
   }
 
-  update(v: Vehicle, horn: boolean, paused: boolean) {
+  update(v: Vehicle, horn: boolean, paused: boolean, rain = 0) {
     const ctx = this.ctx;
     if (!ctx) return;
     const t = ctx.currentTime;
@@ -151,5 +160,6 @@ export class EngineAudio {
     set(this.boostGain.gain, v.boosting ? 0.55 : 0, v.boosting ? 0.04 : 0.25);
     set(this.boostFilter.frequency, v.boosting ? 1400 : 300, 0.2);
     set(this.hornGain.gain, horn ? 0.12 : 0, 0.01);
+    set(this.rainGain.gain, 0.16 * rain, 0.3);
   }
 }

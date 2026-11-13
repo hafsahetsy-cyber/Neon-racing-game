@@ -38,6 +38,11 @@ export class Hud {
         <div><b>G</b> graphics quality</div><div><b>M</b> mute · <b>H</b> hide help</div>
         <div class="pad">Gamepad: RT gas · LT brake · A drift · X boost · Y camera</div>
       </div>
+      <div class="map-wrap" data-mapwrap hidden>
+        <div class="road" data-road></div>
+        <canvas class="minimap" data-map width="180" height="180"></canvas>
+      </div>
+      <div class="attrib" data-attrib></div>
       <div class="speedo">
         <svg viewBox="0 0 200 200">
           <circle class="track" cx="100" cy="100" r="86" />
@@ -67,6 +72,62 @@ export class Hud {
     const rpmArc = 2 * Math.PI * 74 * 0.75;
     this.arcEl.style.strokeDasharray = `${ARC} 999`;
     this.rpmEl.style.strokeDasharray = `${rpmArc} 999`;
+  }
+
+  private map: { canvas: HTMLCanvasElement; scale: number; half: [number, number] } | null = null;
+  private roadName = '';
+
+  setMiniMap(map: { canvas: HTMLCanvasElement; scale: number; half: [number, number] }) {
+    this.map = map;
+    (this.root.querySelector('[data-mapwrap]') as HTMLElement).hidden = false;
+  }
+
+  setAttribution(text: string) {
+    (this.root.querySelector('[data-attrib]') as HTMLElement).textContent = text;
+  }
+
+  setRoadName(name: string) {
+    if (name === this.roadName) return;
+    this.roadName = name;
+    const el = this.root.querySelector('[data-road]') as HTMLElement;
+    el.textContent = name.toUpperCase();
+    el.classList.toggle('show', !!name);
+  }
+
+  private drawMap(v: Vehicle) {
+    const m = this.map;
+    if (!m) return;
+    const cv = this.root.querySelector('[data-map]') as HTMLCanvasElement;
+    const g = cv.getContext('2d')!;
+    const S = cv.width;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.clearRect(0, 0, S, S);
+    g.save();
+    g.beginPath();
+    g.arc(S / 2, S / 2, S / 2 - 2, 0, Math.PI * 2);
+    g.clip();
+    g.fillStyle = 'rgba(8,6,18,0.85)';
+    g.fillRect(0, 0, S, S);
+    const heading = Math.atan2(v.forward.x, -v.forward.z); // 0 = north (-Z), clockwise positive
+    const zoom = 1.9;
+    g.translate(S / 2, S * 0.62);
+    g.rotate(-heading);
+    g.scale(zoom, zoom);
+    g.translate(-(v.position.x + m.half[0]) * m.scale, -(v.position.z + m.half[1]) * m.scale);
+    g.drawImage(m.canvas, 0, 0);
+    g.restore();
+    // player arrow
+    g.fillStyle = '#ff2bd6';
+    g.shadowColor = '#ff2bd6';
+    g.shadowBlur = 8;
+    g.beginPath();
+    g.moveTo(S / 2, S * 0.62 - 9);
+    g.lineTo(S / 2 + 6, S * 0.62 + 7);
+    g.lineTo(S / 2, S * 0.62 + 3);
+    g.lineTo(S / 2 - 6, S * 0.62 + 7);
+    g.closePath();
+    g.fill();
+    g.shadowBlur = 0;
   }
 
   toast(text: string) {
@@ -110,6 +171,7 @@ export class Hud {
       if (this.toastTimer <= 0) this.toastEl.classList.remove('show');
     }
 
+    if (this.frames % 2 === 0) this.drawMap(v);
     this.frames++;
     this.fpsTime += dt;
     if (this.fpsTime >= 0.5) {

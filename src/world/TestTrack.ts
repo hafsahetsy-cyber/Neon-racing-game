@@ -30,9 +30,13 @@ class BoxBatch {
 export interface World {
   group: THREE.Group;
   spawn: { position: THREE.Vector3; yaw: number };
-  update(dt: number, time: number, focus: THREE.Vector3): void;
+  update(dt: number, time: number, focus: THREE.Vector3, player?: THREE.Vector3): void;
   fogColor: THREE.Color;
   fogDensity: number;
+  /** Top-down map image (px per metre = scale) for the HUD. */
+  minimap?: { canvas: HTMLCanvasElement; scale: number; half: [number, number] };
+  roadNameAt?(x: number, z: number): string;
+  attribution?: string;
 }
 
 /**

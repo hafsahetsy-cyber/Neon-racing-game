@@ -8,6 +8,8 @@ import { Vehicle } from '../vehicles/Vehicle';
 import type { VehicleConfig } from '../vehicles/VehicleConfig';
 import { VehicleVisual } from '../vehicles/VehicleVisual';
 import { makeNeonEnvironment } from '../world/materials';
+import { buildCity } from '../world/City';
+import { karachi } from '../world/cities/karachi';
 import { buildTestTrack, type World } from '../world/TestTrack';
 import { CameraRig } from './CameraRig';
 import { Input } from './Input';
@@ -39,6 +41,7 @@ export class Game {
   private last = 0;
   private slowFrames = 0;
   private fastStart = 0;
+  private roadTimer = 0;
 
   constructor(private canvas: HTMLCanvasElement, uiRoot: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({
@@ -80,7 +83,11 @@ export class Game {
     this.events = new RAPIER.EventQueue(true);
 
     this.scene.environment = makeNeonEnvironment(this.renderer);
-    this.world = buildTestTrack(this.physics, q);
+    // ?world=test loads the Phase 1 proving ground instead of the city
+    const testTrack = new URLSearchParams(location.search).get('world') === 'test';
+    this.world = testTrack ? buildTestTrack(this.physics, q) : await buildCity(this.physics, q, karachi);
+    if (this.world.minimap) this.hud.setMiniMap(this.world.minimap);
+    if (this.world.attribution) this.hud.setAttribution(this.world.attribution);
     this.scene.add(this.world.group);
     this.scene.fog = new THREE.FogExp2(this.world.fogColor, this.world.fogDensity);
     this.scene.background = this.world.fogColor;
@@ -89,6 +96,17 @@ export class Game {
     this.visual = new VehicleVisual(vehicleConfig);
     await this.visual.load();
     this.scene.add(this.visual.root);
+
+    const ray = new RAPIER.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 1 });
+    this.rig.obstacle = (from, to) => {
+      const dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z;
+      const len = Math.hypot(dx, dy, dz);
+      if (len < 0.01) return 1;
+      ray.origin.x = from.x; ray.origin.y = from.y; ray.origin.z = from.z;
+      ray.dir.x = dx / len; ray.dir.y = dy / len; ray.dir.z = dz / len;
+      const hit = this.physics.castRay(ray, len, true, RAPIER.QueryFilterFlags.EXCLUDE_DYNAMIC | RAPIER.QueryFilterFlags.EXCLUDE_KINEMATIC);
+      return hit ? hit.timeOfImpact / len : 1;
+    };
 
     this.buildQualityDependent();
     this.resize();
@@ -160,7 +178,12 @@ export class Game {
       this.vehicle.interpolate(this.acc / FIXED_DT);
       this.visual.update(this.vehicle, dt);
       this.rig.update(dt, this.vehicle);
-      this.world.update(dt, this.time, this.camera.position);
+      this.world.update(dt, this.time, this.camera.position, this.vehicle.position);
+      this.roadTimer -= dt;
+      if (this.roadTimer <= 0 && this.world.roadNameAt) {
+        this.roadTimer = 0.4;
+        this.hud.setRoadName(this.world.roadNameAt(this.vehicle.position.x, this.vehicle.position.z));
+      }
       this.fx.update(dt, this.camera, this.renderer.domElement.height);
     }
     this.hud.update(dt, this.vehicle);

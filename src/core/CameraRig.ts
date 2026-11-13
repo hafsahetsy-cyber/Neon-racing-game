@@ -20,6 +20,10 @@ export class CameraRig {
   private _b = new THREE.Vector3();
   private _c = new THREE.Vector3();
 
+  /** Returns how far (0..1) the camera can travel from `from` towards `to` before hitting the world. */
+  obstacle: ((from: THREE.Vector3, to: THREE.Vector3) => number) | null = null;
+  private pull = 1;
+
   constructor(readonly camera: THREE.PerspectiveCamera) {}
 
   cycle(): CameraMode {
@@ -68,6 +72,14 @@ export class CameraRig {
       const lookT = this._c.copy(v.position).addScaledVector(UP, 1.15).addScaledVector(this.heading, 4 + sNorm * 5);
       this.look.lerp(lookT, Math.min(1, dt * 12));
       cam.position.copy(this.pos);
+      // keep the camera out of walls in narrow streets: slide it in towards the car
+      if (this.obstacle) {
+        const pivot = this._b.copy(v.position).addScaledVector(UP, 1.6);
+        const free = Math.min(1, this.obstacle(pivot, this.pos));
+        const target = free < 1 ? Math.max(0.12, free - 0.08) : 1;
+        this.pull += (target - this.pull) * Math.min(1, dt * (target < this.pull ? 30 : 4));
+        if (this.pull < 0.999) cam.position.lerpVectors(pivot, this.pos, this.pull);
+      }
       cam.up.copy(UP);
       cam.lookAt(this.look);
       // lean into corners a touch

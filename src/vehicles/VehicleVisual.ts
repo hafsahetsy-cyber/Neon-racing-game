@@ -155,7 +155,7 @@ export class VehicleVisual {
     const throttleFlame = v.throttle * 0.12 * Math.min(1, v.speed / 20);
     for (let i = 0; i < this.thrusters.length; i++) {
       const f = this.thrusters[i];
-      const len = this.boostGlow * (2.2 + 0.5 * Math.sin(this.time * 60 + i * 2)) + throttleFlame;
+      const len = this.boostGlow * (1.5 + 0.35 * Math.sin(this.time * 60 + i * 2)) + throttleFlame;
       f.scale.set(1 + this.boostGlow * 0.6, 1 + this.boostGlow * 0.6, Math.max(0.01, len));
       f.visible = len > 0.02;
     }

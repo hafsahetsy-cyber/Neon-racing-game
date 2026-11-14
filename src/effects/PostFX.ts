@@ -10,9 +10,14 @@ uniform float uBlur;
 uniform float uAberration;
 uniform float uDistortion;
 uniform float uPulse;
+uniform float uShimmer;
+uniform float uTime;
 
 void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
   vec2 c = uv - 0.5;
+  // heat haze: the air ripples in a band along the horizon
+  float band = exp(-pow((uv.y - 0.56) * 7.0, 2.0));
+  c.x += (sin(uv.y * 150.0 + uTime * 5.0) + sin(uv.y * 61.0 - uTime * 3.1)) * 0.0011 * uShimmer * band;
   float r2 = dot(c, c);
   // lens distortion: edges stretch outward as speed builds (plus a punch on boost)
   float k = uDistortion + uPulse * 0.35;
@@ -45,6 +50,8 @@ class SpeedWarpEffect extends Effect {
         ['uAberration', new THREE.Uniform(0)],
         ['uDistortion', new THREE.Uniform(0)],
         ['uPulse', new THREE.Uniform(0)],
+        ['uShimmer', new THREE.Uniform(0)],
+        ['uTime', new THREE.Uniform(0)],
       ]),
     });
   }
@@ -55,6 +62,8 @@ export interface SpeedFxState {
   speed: number;
   boosting: boolean;
   impact: number;
+  /** 0..1 heat haze along the horizon (hot cities). */
+  shimmer?: number;
 }
 
 export class PostFX {
@@ -124,6 +133,8 @@ export class PostFX {
       u.get('uAberration')!.value = 0.0035 * k + s.impact * 0.006;
       u.get('uDistortion')!.value = 0.16 * k;
       u.get('uPulse')!.value = this.pulse * this.pulse;
+      u.get('uShimmer')!.value = s.shimmer ?? 0;
+      u.get('uTime')!.value += dt;
     }
     if (this.bloom) this.bloom.intensity = 1.15 + 0.5 * k + this.pulse * 1.2;
     this.vignette.darkness = 0.55 + 0.25 * k;

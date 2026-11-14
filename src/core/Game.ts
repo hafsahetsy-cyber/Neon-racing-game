@@ -564,6 +564,7 @@ export class Game {
         this.roadTimer = 0.4;
         this.hud.setRoadName(this.world.roadNameAt(this.vehicle.position.x, this.vehicle.position.z));
       }
+      this.fx.spray = this.world.sprayAt?.(this.vehicle.position.x, this.vehicle.position.z);
       this.fx.update(dt, this.camera, this.renderer.domElement.height);
       this.race.update(dt, this.vehicle);
       this.updateRaceHud();
@@ -586,6 +587,7 @@ export class Game {
       speed: this.photo.on ? 0 : this.vehicle.speed / this.vehicle.config.engine.topSpeed,
       boosting: !this.photo.on && this.vehicle.boosting,
       impact: this.vehicle.impact,
+      shimmer: this.photo.on ? 0 : this.city.atmosphere.shimmer,
     });
     this.autoQuality(dt);
   }

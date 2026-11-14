@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { addCamels, addDroneShow, addDunes, addMegaSpire, addSandWind, addWaterTaxis } from '../city/desert';
+import { addCamels, addDroneShow, addDunes, addMegaSpire, addPalmIsland, addSailTower, addSandWind, addWaterTaxis } from '../city/desert';
+import { addBoats, addWater } from '../city/features';
 import type { CityDefinition, LandmarkContext } from '../city/types';
 
 const GOLD = 0xffc24a;
@@ -151,6 +152,7 @@ export const dubai: CityDefinition = {
     ambient: 0.25,
     halo: 0.3,
     fogBreath: 0.35, // gusts of dust
+    shimmer: 1,
   },
   neon: [GOLD, WHITE, 0xff8a3c, 0x6fe0ff],
   architecture: 'gulf',
@@ -170,7 +172,8 @@ export const dubai: CityDefinition = {
   music: { bpm: 110, root: 65.41, scale: [0, 1, 4, 5, 7, 8, 11], progression: [0, 1, 0, 4] },
   water: { deep: 0x16222e, glint: 0xffc070, grip: 0.55 },
   extend: { south: 720 },
-  skylineGap: [Math.PI / 2 - 0.85, Math.PI / 2 + 0.85], // open desert to the south
+  // open desert to the south, open sea to the north
+  skylineGap: [[Math.PI / 2 - 0.85, Math.PI / 2 + 0.85], [-Math.PI / 2 - 0.95, -Math.PI / 2 + 0.95]],
   landmarks: { fort, clocktower },
   features: (ctx) => {
     const [hx, hz] = ctx.half;
@@ -182,6 +185,11 @@ export const dubai: CityDefinition = {
     // abras on the Creek, a drone show above it, and one impossible needle on the horizon
     addWaterTaxis(ctx, 30, 0xffe2b0);
     addDroneShow(ctx, 0, -40, 210, 'DXB');
-    addMegaSpire(ctx, hx + 900, -hz - 700, 900);
+    addMegaSpire(ctx, hx + 1100, -hz - 300, 900);
+    // the Gulf beyond the northern edge: dhows, a palm-shaped island of light, a sail of a tower
+    addWater(ctx, [-hx - 2600, -hz - 3000, hx + 2600, -hz - 62], 0x16222e, 0xffc070);
+    addBoats(ctx, [-hx, -hz - 600, hx, -hz - 130], 18, 0xffe2b0);
+    addPalmIsland(ctx, -350, -hz - 1250, 520);
+    addSailTower(ctx, 620, -hz - 760, 250);
   },
 };

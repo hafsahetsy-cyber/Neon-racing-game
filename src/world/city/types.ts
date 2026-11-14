@@ -57,7 +57,7 @@ export interface CityDefinition {
   /** Streams of flying traffic overhead (0 for none). */
   skyLanes: number;
   /** Compass arc [from, to] in radians (atan2(z, x)) kept free of skyline towers — open water, usually. */
-  skylineGap?: [number, number];
+  skylineGap?: [number, number] | [number, number][];
   /** Terrain, water, things in the sky and the signature drive: composed from world/city/features.ts. */
   features?: (ctx: FeatureContext) => void;
   map: string;
@@ -94,6 +94,8 @@ export interface Atmosphere {
   ambient: number;
   /** Glowing halos round street lamps (0 = clear air … 1 = thick smog). */
   halo: number;
+  /** 0..1 heat shimmer along the horizon. */
+  shimmer?: number;
   /** How much the fog slowly thickens and thins (sea fog rolling in). */
   fogBreath: number;
 }
@@ -109,7 +111,7 @@ export interface FeatureContext {
   /** World-space triangle-mesh collider (terrain). */
   addTrimesh(vertices: Float32Array, indices: Uint32Array): void;
   /** Register a patch of ground with its own grip (1 = tarmac). Return undefined outside the patch. */
-  addGripZone(fn: (x: number, z: number) => number | undefined): void;
+  addGripZone(fn: (x: number, z: number) => number | undefined, spray?: number): void;
   neon: number[];
   fogColor: THREE.Color;
   fogDensity: number;

@@ -62,7 +62,7 @@ export function addDunes(ctx: FeatureContext, rect: [number, number, number, num
   mesh.frustumCulled = false;
   ctx.group.add(mesh);
   ctx.addTrimesh(pos, idx);
-  ctx.addGripZone((x, z) => (x > x0 && x < x1 && z > z0 + 30 && z < z1 ? grip : undefined));
+  ctx.addGripZone((x, z) => (x > x0 && x < x1 && z > z0 + 30 && z < z1 ? grip : undefined), color);
   return height;
 }
 
@@ -150,7 +150,7 @@ export function addSandWind(ctx: FeatureContext, count: number, color = 0xe2c08c
 export function addWaterTaxis(ctx: FeatureContext, count: number, lamp: number) {
   const geo = mergeGeometries([
     colorBox(2.2, 0.7, 7.5, 0, 0.35, 0, 0x2a1c10),
-    colorBox(2.0, 0.08, 5.2, 0, 2.1, 0.2, ctx.neon[2 % ctx.neon.length], 0.4), // canopy
+    colorBox(2.0, 0.08, 5.2, 0, 2.1, 0.2, 0x8a3a26, 0.9), // canopy
     colorBox(0.07, 1.4, 0.07, -0.95, 1.4, -2.2, 0x14100c),
     colorBox(0.07, 1.4, 0.07, 0.95, 1.4, -2.2, 0x14100c),
     colorBox(0.07, 1.4, 0.07, -0.95, 1.4, 2.6, 0x14100c),
@@ -310,4 +310,72 @@ export function addMegaSpire(ctx: FeatureContext, x: number, z: number, height: 
   beacon.position.set(x, y + 152, z);
   ctx.group.add(beacon);
   ctx.animate((t) => (beacon.visible = Math.sin(t * 2.2) > -0.2));
+}
+
+/** A palm-shaped island drawn in light on open water, with beacons on its frond tips so it reads from shore. */
+export function addPalmIsland(ctx: FeatureContext, cx: number, cz: number, size: number) {
+  const parts: THREE.BufferGeometry[] = [];
+  const A = ctx.neon[0], B = ctx.neon[1 % ctx.neon.length];
+  const strip = (x0: number, z0: number, x1: number, z1: number, w: number, c: number) => {
+    const len = Math.hypot(x1 - x0, z1 - z0);
+    const g = colorBox(w, 1.2, len, 0, 0.7, 0, c, 2.2);
+    g.rotateY(Math.atan2(x1 - x0, z1 - z0));
+    g.translate(cx + (x0 + x1) / 2, 0, cz + (z0 + z1) / 2);
+    parts.push(g);
+  };
+  // trunk runs towards the shore (+Z), the crown fans out to sea
+  strip(0, size * 0.55, 0, 0, 16, A);
+  const FRONDS = 13;
+  for (let i = 0; i < FRONDS; i++) {
+    const a = ((i / (FRONDS - 1)) * 2 - 1) * 1.25;
+    const L = size * (0.5 - Math.abs(a) * 0.1);
+    let px = 0, pz = 0;
+    const SEG = 5;
+    for (let k = 1; k <= SEG; k++) {
+      const t = k / SEG;
+      // each frond curls outward as it goes
+      const ang = a * (0.55 + 0.45 * t);
+      const x = Math.sin(ang) * L * t, z = -Math.cos(ang) * L * t;
+      strip(px, pz, x, z, 9, A);
+      px = x;
+      pz = z;
+    }
+    parts.push(colorBox(2.2, 46, 2.2, cx + px, 23, cz + pz, B, 2.6)); // beacon
+  }
+  // the breakwater crescent around the crown
+  const R = size * 0.66;
+  let lx = 0, lz = 0;
+  for (let k = 0; k <= 28; k++) {
+    const a = ((k / 28) * 2 - 1) * 1.75;
+    const x = Math.sin(a) * R, z = -Math.cos(a) * R + size * 0.08;
+    if (k > 0) strip(lx, lz, x, z, 7, B);
+    lx = x;
+    lz = z;
+  }
+  const mesh = new THREE.Mesh(mergeGeometries(parts), new THREE.MeshBasicMaterial({ vertexColors: true, fog: false }));
+  mesh.frustumCulled = false;
+  ctx.group.add(mesh);
+}
+
+/** An original sail-shaped tower standing in the water: a curved fin of glass with a lit leading edge. */
+export function addSailTower(ctx: FeatureContext, x: number, z: number, height: number) {
+  const parts: THREE.BufferGeometry[] = [];
+  const TIERS = 22;
+  for (let i = 0; i < TIERS; i++) {
+    const t = i / (TIERS - 1);
+    // the sail's belly: widest a third of the way up, tapering to a point
+    const depth = 70 * Math.sin(Math.PI * Math.pow(t, 0.75)) * (1 - t * 0.35) + 6;
+    const h = height / TIERS;
+    const body = colorBox(26 * (1 - t * 0.5), h * 0.98, depth, 0, h * (i + 0.5), -depth / 2, new THREE.Color(0x52627c).lerp(new THREE.Color(ctx.neon[0]), 0.08 + t * 0.18));
+    parts.push(body);
+    parts.push(colorBox(1.4, h, 1.4, 0, h * (i + 0.5), -depth, ctx.neon[1 % ctx.neon.length], 2.4)); // leading edge
+    if (i % 3 === 0) parts.push(colorBox(27 * (1 - t * 0.5), 0.7, depth + 0.6, 0, h * i + 0.4, -depth / 2, ctx.neon[0], 2));
+  }
+  parts.push(colorBox(1.2, 60, 1.2, 0, height + 30, -6, ctx.neon[1 % ctx.neon.length], 2.6));
+  parts.push(colorBox(90, 3, 90, 0, 1.5, -28, 0x2a2620)); // its little island
+  const mesh = new THREE.Mesh(mergeGeometries(parts), new THREE.MeshBasicMaterial({ vertexColors: true, fog: false }));
+  mesh.position.set(x, 0, z);
+  mesh.rotation.y = 0.5;
+  mesh.frustumCulled = false;
+  ctx.group.add(mesh);
 }

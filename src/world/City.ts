@@ -23,7 +23,7 @@ export async function buildCity(world: RAPIER.World, quality: QualitySettings, d
   const fogDensity = def.fog.density;
   const grid = new RoadGrid(map.roads);
   const animators: ((t: number, focus: THREE.Vector3) => void)[] = [];
-  const gripZones: ((x: number, z: number) => number | undefined)[] = [];
+  const gripZones: { fn: (x: number, z: number) => number | undefined; spray?: number }[] = [];
   const ext = { north: 0, south: 0, east: 0, west: 0, ...def.extend };
   const [HX, HZ] = map.half;
 
@@ -119,7 +119,7 @@ export async function buildCity(world: RAPIER.World, quality: QualitySettings, d
     addTrimesh(vertices, indices) {
       world.createCollider(RAPIER.ColliderDesc.trimesh(vertices, indices).setFriction(0.9));
     },
-    addGripZone: (fn) => gripZones.push(fn),
+    addGripZone: (fn, spray) => gripZones.push({ fn, spray }),
     addBox(center, size, quat) {
       const d = RAPIER.ColliderDesc.cuboid(size.x / 2, size.y / 2, size.z / 2).setTranslation(center.x, center.y, center.z).setFriction(0.9);
       if (quat) d.setRotation({ x: quat.x, y: quat.y, z: quat.z, w: quat.w });
@@ -130,7 +130,7 @@ export async function buildCity(world: RAPIER.World, quality: QualitySettings, d
     addMappedWater(fctx, wm, def.water.deep, def.water.glint);
     const g = def.water.grip;
     // roads over the water (bridges) keep their normal grip
-    gripZones.push((x, z) => (isWater(x, z) && !grid.nearest(x, z, 0.5) ? g : undefined));
+    gripZones.push({ fn: (x, z) => (isWater(x, z) && !grid.nearest(x, z, 0.5) ? g : undefined), spray: 0xd6efff });
   }
   def.features?.(fctx);
 
@@ -167,8 +167,8 @@ export async function buildCity(world: RAPIER.World, quality: QualitySettings, d
   for (let i = 0; i < quality.skyline; i++) {
     let a = rnd() * Math.PI * 2 - Math.PI;
     // keep open water clear of towers
-    const gap = def.skylineGap;
-    for (let tries = 0; gap && a > gap[0] && a < gap[1] && tries < 20; tries++) a = rnd() * Math.PI * 2 - Math.PI;
+    const gaps = (def.skylineGap ? (typeof def.skylineGap[0] === 'number' ? [def.skylineGap] : def.skylineGap) : []) as [number, number][];
+    for (let tries = 0; gaps.some((gp) => a > gp[0] && a < gp[1]) && tries < 30; tries++) a = rnd() * Math.PI * 2 - Math.PI;
     const r = R0 + rnd() * 900;
     const h = 90 + Math.pow(rnd(), 2) * 520;
     const w = 40 + rnd() * 70;
@@ -222,10 +222,14 @@ export async function buildCity(world: RAPIER.World, quality: QualitySettings, d
     roadNameAt: (x, z) => grid.nearest(x, z, 3)?.road.n ?? '',
     gripAt(x, z) {
       for (const zone of gripZones) {
-        const g = zone(x, z);
+        const g = zone.fn(x, z);
         if (g !== undefined) return g;
       }
       return 1;
+    },
+    sprayAt(x, z) {
+      for (const zone of gripZones) if (zone.spray !== undefined && zone.fn(x, z) !== undefined) return zone.spray;
+      return undefined;
     },
     setWet(k) {
       roadMats.forEach((m, i) => {

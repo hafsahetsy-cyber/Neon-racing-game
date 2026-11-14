@@ -38,6 +38,8 @@ export interface World {
   roadNameAt?(x: number, z: number): string;
   /** Tyre grip multiplier of the ground here (1 = tarmac; sand and water are looser). */
   gripAt?(x: number, z: number): number;
+  /** Colour of what the wheels throw up here (sand, water), if anything. */
+  sprayAt?(x: number, z: number): number | undefined;
   /** Multiplier on fog density that the world animates (fog banks rolling in). */
   readonly fogScale?: number;
   /** 0 dry .. 1 soaked: roads turn glossy, fog thickens. */

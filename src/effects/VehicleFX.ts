@@ -182,6 +182,9 @@ export class VehicleFX {
   private sparkCol = new THREE.Color(8, 4.2, 1.2);
   private smokeCol = new THREE.Color(0.55, 0.5, 0.75);
   private boostCol: THREE.Color;
+  /** Colour of loose ground under the car (sand, shallow water): wheels throw up a plume of it. */
+  spray: number | undefined;
+  private sprayCol = new THREE.Color();
 
   constructor(private vehicle: Vehicle, private q: QualitySettings) {
     const glow = makeGlowTexture();
@@ -244,6 +247,20 @@ export class VehicleFX {
           _v.z += (Math.random() - 0.5) * 7;
           this.sparks.emit(w.contact, _v, this.sparkCol, 1, 0.07 + Math.random() * 0.06, 0.3 + Math.random() * 0.45);
         }
+      }
+    }
+    if (emitSmoke && this.spray !== undefined && v.speed > 4) {
+      this.sprayCol.set(this.spray);
+      const k = Math.min(1, v.speed / 30);
+      for (let i = 0; i < cfg.wheels.length; i++) {
+        const w = v.wheels[i];
+        if (!w.grounded || cfg.wheels[i].pos[2] < 0) continue; // rear wheels only, so the car stays visible
+        _v.copy(v.velocity).multiplyScalar(0.35);
+        _v.x += (Math.random() - 0.5) * 3;
+        _v.y += 1.5 + Math.random() * 2.5 * k;
+        _v.z += (Math.random() - 0.5) * 3;
+        _d.copy(w.contact).setY(w.contact.y + 0.2);
+        this.smoke.emit(_d, _v, this.sprayCol, 0.045 + 0.06 * k, 0.45 + Math.random() * 0.4, 0.55 + Math.random() * 0.45);
       }
     }
     if (emitSmoke) this.smokeAcc = 0;

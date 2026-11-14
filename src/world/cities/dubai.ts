@@ -152,7 +152,6 @@ export const dubai: CityDefinition = {
     ambient: 0.25,
     halo: 0.3,
     fogBreath: 0.35, // gusts of dust
-    shimmer: 1,
   },
   neon: [GOLD, WHITE, 0xff8a3c, 0x6fe0ff],
   architecture: 'gulf',

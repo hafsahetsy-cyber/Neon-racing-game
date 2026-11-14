@@ -100,7 +100,7 @@ export class CameraRig {
       // cinematic: slow low orbit
       const show = this.mode === 'showroom';
       this.orbit += dt * (show ? 0.22 : 0.35);
-      const r = show ? 5.2 + v.config.chassis.halfExtents[2] * 1.1 : 7.5 + sNorm * 2;
+      const r = show ? 5.2 + v.config.chassis.halfExtents[2] * 1.1 + Math.max(0, v.config.chassis.halfExtents[1] - 0.5) * 3 : 7.5 + sNorm * 2;
       const desired = this._b
         .copy(v.position)
         .add(this._c.set(Math.cos(this.orbit) * r, 1.1 + 0.9 * Math.sin(this.orbit * 0.7) + 0.9, Math.sin(this.orbit) * r));

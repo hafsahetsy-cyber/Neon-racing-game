@@ -64,6 +64,8 @@ export interface VehicleConfig {
   stats: { speed: number; accel: number; handling: number; drift: number };
   /** Chase-camera distance multiplier for long vehicles. */
   cameraDistance?: number;
+  /** 0..1 — how much of the grip lost on loose ground (sand, shallow water) this vehicle keeps. */
+  offroad?: number;
 }
 
 /**

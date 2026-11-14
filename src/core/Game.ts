@@ -541,7 +541,9 @@ export class Game {
       let steps = 0;
       while (this.acc >= FIXED_DT && steps < 5) {
         // loose surfaces (sand, shallow water) ease in rather than snapping
-        const grip = this.world.gripAt?.(this.vehicle.position.x, this.vehicle.position.z) ?? 1;
+        const ground = this.world.gripAt?.(this.vehicle.position.x, this.vehicle.position.z) ?? 1;
+        // off-road vehicles win back part of what loose ground takes away
+        const grip = 1 - (1 - ground) * (1 - (this.vehicle.config.offroad ?? 0));
         this.vehicle.gripScale += (grip - this.vehicle.gripScale) * 0.12;
         this.vehicle.step(FIXED_DT, this.mode === 'drive' && !this.race.holding ? this.input.state : PARKED);
         this.physics.step(this.events);

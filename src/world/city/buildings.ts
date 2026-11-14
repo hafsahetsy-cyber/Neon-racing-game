@@ -1,5 +1,7 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { colorBox } from './props';
 import type { CityDefinition, MapBuilding } from './types';
 
 const CHUNK = 320;
@@ -11,6 +13,11 @@ uniform vec3 uFogColor;
 uniform float uFogDensity;
 uniform vec3 uStreet;
 uniform vec3 uStone;
+uniform vec3 uSun;
+uniform vec3 uSunDir;
+uniform vec3 uTrim;
+uniform float uDay;
+uniform float uArch;
 varying vec2 vUv;
 varying vec4 vInfo;
 varying vec3 vColor;
@@ -26,17 +33,19 @@ void main() {
   vec2 uv = vUv;
   vec3 col;
   float shade = 0.7 + 0.3 * dot(normalize(vN), normalize(vec3(-0.4, 0.6, 0.5)));
+  // daylight: sun-facing walls catch the light, the rest sit in sky-lit shade
+  vec3 day = uSun * uDay * (0.2 + 0.8 * max(dot(normalize(vN), uSunDir), 0.0));
 
   if (vInfo.w > 0.5) {
     // ---- rooftops: dark, with water tanks and clutter
-    col = vec3(0.016, 0.016, 0.022);
+    col = vec3(0.016, 0.016, 0.022) + vec3(0.22, 0.2, 0.18) * uSun * uDay;
     vec2 c = floor(vWorld.xz / 2.2);
     col += step(0.94, hash(c + seed)) * vec3(0.03, 0.04, 0.06);
     if (style > 0.5 && style < 1.5) col += vColor * 0.05;
   } else if (style < 0.5) {
     // ---- old city block: shops at street level, flats above
     float grime = 0.72 + 0.28 * hash(vec2(floor(uv.x * 1.3), seed * 7.0));
-    col = vColor * 0.06 * grime * shade;
+    col = vColor * grime * (0.06 * shade + day);
     if (uv.y < 3.6) {
       float sx = uv.x / 4.2;
       float id = floor(sx), fx = fract(sx);
@@ -61,18 +70,33 @@ void main() {
       vec2 g = vec2(uv.x / 2.6, (uv.y - 4.7) / 3.3);
       vec2 cell = floor(g), f = fract(g);
       float win = step(0.22, f.x) * step(f.x, 0.78) * step(0.2, f.y) * step(f.y, 0.72);
+      if (uArch > 0.5) {
+        // Mughal: tall pointed-arch openings
+        float t = clamp((f.y - 0.48) / 0.32, 0.0, 1.0);
+        win = step(abs(f.x - 0.5), 0.25 * (1.0 - t * t)) * step(0.16, f.y) * step(f.y, 0.8);
+      }
       float r = hash(cell + seed * 57.0);
       float lit = step(0.7, r);
       vec3 wc = mix(vec3(1.0, 0.7, 0.36), vec3(0.7, 0.95, 1.0), step(0.9, r));
       col = mix(col, mix(vec3(0.012, 0.014, 0.02), wc * (0.6 + 0.9 * fract(r * 9.0)), lit), win);
       col *= 1.0 - 0.5 * step(f.y, 0.06); // balcony ledge
+      if (uArch > 0.5) {
+        // jharoka: a screened balcony box on some bays, lamplight glowing through the lattice
+        float jh = step(0.7, hash(cell * 1.7 + seed * 9.0));
+        float box = step(0.08, f.x) * step(f.x, 0.92) * step(0.06, f.y) * step(f.y, 0.46) * jh;
+        float jali = step(0.5, fract(f.x * 15.0)) * step(0.5, fract(f.y * 17.0));
+        vec3 wood = vColor * 0.45 * (0.06 * shade + day);
+        col = mix(col, wood + vec3(1.0, 0.58, 0.22) * jali * 0.7 * step(0.35, r), box);
+        // crenellated parapet along the roofline
+        col *= 1.0 - 0.45 * step(H - 0.9, uv.y) * step(0.5, fract(uv.x / 1.5));
+      }
       float ac = step(0.84, hash(cell + seed * 3.0)) * step(0.8, f.x) * step(f.x, 0.97) * step(0.3, f.y) * step(f.y, 0.5);
       col = mix(col, vec3(0.035), ac);
     }
     col += vColor * uStreet * 0.2 * exp(-uv.y / 6.0) * shade; // street-light wash
   } else if (style < 1.5) {
     // ---- neon megastructure
-    col = vec3(0.01, 0.011, 0.02);
+    col = vec3(0.01, 0.011, 0.02) + vec3(0.16, 0.18, 0.24) * day;
     vec2 g = vec2(uv.x / 4.0, uv.y / 4.5);
     vec2 cell = floor(g), f = fract(g);
     float win = step(0.15, f.x) * step(f.x, 0.85) * step(0.25, f.y) * step(f.y, 0.8);
@@ -92,7 +116,7 @@ void main() {
   } else if (style < 2.5) {
     // ---- heritage sandstone: arcades, warm floodlights, one neon line of trim
     vec3 stone = uStone * (0.82 + 0.36 * hash(vec2(floor(uv.x / 0.9), floor(uv.y / 0.45)) + seed));
-    col = stone * 0.075 * shade;
+    col = stone * (0.075 * shade + day);
     vec2 g = vec2(uv.x / 3.4, uv.y / 4.4);
     vec2 cell = floor(g), f = fract(g);
     vec2 q = vec2((f.x - 0.5) * 3.4, f.y * 4.4);
@@ -103,10 +127,10 @@ void main() {
     col = mix(col, glow * (0.3 + 0.7 * smoothstep(0.5, 3.4, q.y)), open);
     col = mix(col, stone * 0.13, step(4.12, q.y));
     col += stone * vec3(1.0, 0.68, 0.38) * 0.55 * exp(-uv.y / 9.0) * shade;
-    col += vec3(0.0, 0.9, 1.0) * 2.2 * step(H - 0.4, uv.y) * step(uv.y, H - 0.14);
+    col += uTrim * 2.2 * step(H - 0.4, uv.y) * step(uv.y, H - 0.14);
   } else {
     // ---- modern plaza / mid-rise
-    col = vec3(0.03, 0.034, 0.04) * shade;
+    col = vec3(0.03, 0.034, 0.04) * shade + vec3(0.3, 0.32, 0.36) * day;
     if (uv.y < 4.5) {
       float sx = uv.x / 6.0;
       float fx = fract(sx), r = hash(vec2(floor(sx), seed * 3.0));
@@ -158,7 +182,7 @@ interface ChunkData {
   idx: number[];
 }
 
-function hash01(a: number, b: number) {
+export function hash01(a: number, b: number) {
   const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453;
   return s - Math.floor(s);
 }
@@ -174,7 +198,7 @@ export function buildBuildings(
   const group = new THREE.Group();
   const chunks = new Map<string, ChunkData>();
   const facades = def.facades.map((c) => new THREE.Color(c));
-  const neon = NEON.map((c) => new THREE.Color(c));
+  const neon = (def.neon.length ? def.neon : NEON).map((c) => new THREE.Color(c));
   const c2 = new THREE.Vector2();
 
   const extrude = (ch: ChunkData, pts: number[], y0: number, y1: number, style: number, seed: number, H: number, color: THREE.Color) => {
@@ -251,6 +275,11 @@ export function buildBuildings(
       uFogDensity: { value: fogDensity },
       uStreet: { value: new THREE.Color(def.streetLight) },
       uStone: { value: new THREE.Color(def.heritageStone) },
+      uSun: { value: new THREE.Color(def.atmosphere.sun.color) },
+      uSunDir: { value: new THREE.Vector3(...def.atmosphere.sun.dir).normalize() },
+      uTrim: { value: new THREE.Color(def.neon[0]) },
+      uDay: { value: def.atmosphere.daylight },
+      uArch: { value: def.architecture === 'mughal' ? 1 : 0 },
     },
   });
 
@@ -270,5 +299,92 @@ export function buildBuildings(
     world.createCollider(RAPIER.ColliderDesc.trimesh(positions, indices).setFriction(0.3).setRestitution(0.1));
     tris += indices.length / 3;
   }
+  group.add(buildRoofProps(buildings, def));
   return { group, material, triangles: tris };
+}
+
+function tint(g: THREE.BufferGeometry, color: number, k = 1) {
+  const c = new THREE.Color(color).multiplyScalar(k);
+  const n = g.attributes.position.count;
+  const a = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) a.set([c.r, c.g, c.b], i * 3);
+  g.setAttribute('color', new THREE.BufferAttribute(a, 3));
+  return g;
+}
+
+/**
+ * What sits on the roofs is as much a city's signature as its facades:
+ * Karachi's black water tanks and antenna masts, Lahore's little domes and onion-capped towers.
+ */
+function buildRoofProps(buildings: MapBuilding[], def: CityDefinition): THREE.Group {
+  const g = new THREE.Group();
+  const mughal = def.architecture === 'mughal';
+  const lit = 0.25 + def.atmosphere.daylight * 1.1; // unlit materials: brighten by hand at dusk/day
+  const small: THREE.Matrix4[] = [];
+  const caps: THREE.Matrix4[] = [];
+  const q = new THREE.Quaternion();
+  const p = new THREE.Vector3();
+  const s = new THREE.Vector3();
+  for (const b of buildings) {
+    const n = b.p.length / 2;
+    let cx = 0, cz = 0, area = 0;
+    for (let i = 0, j = n - 1; i < n; j = i++) {
+      cx += b.p[i * 2];
+      cz += b.p[i * 2 + 1];
+      area += b.p[j * 2] * b.p[i * 2 + 1] - b.p[i * 2] * b.p[j * 2 + 1];
+    }
+    cx /= n;
+    cz /= n;
+    const R = Math.sqrt(Math.abs(area) / 2 / Math.PI);
+    const seed = hash01(cx, cz);
+    if (b.s === 1) {
+      const stepped = seed > 0.3;
+      const top = stepped ? b.h * (1.22 + seed * 0.3) : b.h;
+      const k = THREE.MathUtils.clamp((R * (stepped ? 0.62 + seed * 0.2 : 1)) / 9, 0.7, 2.4);
+      caps.push(new THREE.Matrix4().compose(p.set(cx, top, cz), q.identity(), s.setScalar(k)));
+    } else if (b.s !== 3 && R > 3.2) {
+      const chance = mughal ? (b.s === 2 ? 0.75 : 0.17) : 0.2;
+      if (hash01(cx * 1.31, cz * 0.77) > chance) continue;
+      const k = THREE.MathUtils.clamp(R * 0.26, 0.8, mughal ? 2.4 : 1.4);
+      small.push(new THREE.Matrix4().compose(p.set(cx, b.h, cz), q.identity(), s.setScalar(k)));
+    }
+  }
+  const smallGeo = mughal
+    ? (() => {
+        const dome = tint(new THREE.SphereGeometry(1.5, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), 0xd9cdb8, lit);
+        dome.scale(1, 1.25, 1);
+        dome.translate(0, 0.5, 0);
+        return mergeGeometries([dome, tint(new THREE.CylinderGeometry(1.55, 1.7, 0.5, 14), 0xb9a48a, lit).translate(0, 0.25, 0), colorBox(0.1, 1.1, 0.1, 0, 2.8, 0, def.neon[0], 3)]);
+      })()
+    : mergeGeometries([
+        tint(new THREE.CylinderGeometry(1.0, 1.0, 1.7, 12), 0x0b0b0e, 1 + lit).translate(0, 1.75, 0),
+        colorBox(1.6, 0.9, 1.6, 0, 0.45, 0, 0x16161a),
+      ]);
+  const capGeo = mughal
+    ? (() => {
+        const onion = tint(new THREE.SphereGeometry(5, 18, 12), 0xe6dccb, lit);
+        onion.scale(1, 1.25, 1);
+        onion.translate(0, 6.6, 0);
+        const ring = tint(new THREE.TorusGeometry(4.6, 0.22, 6, 32), def.neon[0], 3);
+        ring.rotateX(Math.PI / 2);
+        ring.translate(0, 1.6, 0);
+        return mergeGeometries([onion, tint(new THREE.CylinderGeometry(4.6, 5.2, 1.6, 18), 0xbfa98c, lit).translate(0, 0.8, 0), ring, colorBox(0.3, 7, 0.3, 0, 16, 0, def.neon[1], 3.5)]);
+      })()
+    : mergeGeometries([
+        colorBox(0.6, 24, 0.6, 0, 12, 0, 0x0c0c10),
+        colorBox(5, 0.25, 0.25, 0, 9, 0, 0x0c0c10),
+        colorBox(0.25, 0.25, 3.4, 0, 15, 0, 0x0c0c10),
+        colorBox(4, 2.2, 4, 0, 1.1, 0, 0x101014),
+        colorBox(0.7, 0.7, 0.7, 0, 24.4, 0, 0xff1030, 6),
+        colorBox(4.1, 0.2, 4.1, 0, 2.3, 0, def.neon[0], 2.5),
+      ]);
+  const mat = new THREE.MeshBasicMaterial({ vertexColors: true });
+  for (const [geo, list] of [[smallGeo, small], [capGeo, caps]] as const) {
+    const mesh = new THREE.InstancedMesh(geo, mat, Math.max(1, list.length));
+    list.forEach((m, i) => mesh.setMatrixAt(i, m));
+    mesh.count = list.length;
+    mesh.frustumCulled = false;
+    g.add(mesh);
+  }
+  return g;
 }

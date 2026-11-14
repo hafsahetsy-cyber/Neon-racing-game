@@ -36,6 +36,8 @@ export interface World {
   /** Top-down map image (px per metre = scale) for the HUD. */
   minimap?: { canvas: HTMLCanvasElement; scale: number; half: [number, number] };
   roadNameAt?(x: number, z: number): string;
+  /** Multiplier on fog density that the world animates (fog banks rolling in). */
+  readonly fogScale?: number;
   /** 0 dry .. 1 soaked: roads turn glossy, fog thickens. */
   setWet?(k: number): void;
   attribution?: string;

@@ -38,8 +38,20 @@ export interface CityDefinition {
   /** Three letters that start this city's party codes, e.g. KHI. */
   codePrefix: string;
   music: import('../../audio/Music').MusicStyle;
-  /** Optional city-wide ambience (Lahore's kites, …). */
-  ambient?: (ctx: { group: THREE.Group; animate: (fn: (time: number) => void) => void; half: [number, number] }) => void;
+  /** The city's own neon colours, strongest first. Used for towers, signs, trims, traffic and set pieces. */
+  neon: number[];
+  /** Time of day, sky and air — the first thing that tells two cities apart. */
+  atmosphere: Atmosphere;
+  /** Which family of facades and rooftops the building generator draws. */
+  architecture: 'colonial' | 'mughal';
+  /** Relative share of each ambient traffic type. */
+  trafficMix: Partial<Record<TrafficKind, number>>;
+  /** Streams of flying traffic overhead (0 for none). */
+  skyLanes: number;
+  /** Compass arc [from, to] in radians (atan2(z, x)) kept free of skyline towers — open water, usually. */
+  skylineGap?: [number, number];
+  /** Terrain, water, things in the sky and the signature drive: composed from world/city/features.ts. */
+  features?: (ctx: FeatureContext) => void;
   map: string;
   fog: { color: number; density: number };
   sky: { horizon: number; zenith: number };
@@ -56,6 +68,38 @@ export interface CityDefinition {
   spawnNear: [number, number];
   /** Hand-built landmarks keyed by the ids in map.json. */
   landmarks: Record<string, LandmarkBuilder>;
+}
+
+export type TrafficKind = 'bus' | 'rickshaw' | 'car' | 'bike' | 'tonga';
+
+export interface Atmosphere {
+  /** 0 = deep night … 1 = full daylight on the facades. */
+  daylight: number;
+  /** Sun or moon: direction it shines from, colour, apparent size and light strength. */
+  sun: { dir: [number, number, number]; color: number; size: number; intensity: number };
+  /** Sky colour between horizon and zenith. */
+  skyMid: number;
+  /** 0..1 star visibility. */
+  stars: number;
+  hemi: { sky: number; ground: number; intensity: number };
+  /** Strength of the street-light colour as ambient light. */
+  ambient: number;
+  /** Glowing halos round street lamps (0 = clear air … 1 = thick smog). */
+  halo: number;
+  /** How much the fog slowly thickens and thins (sea fog rolling in). */
+  fogBreath: number;
+}
+
+export interface FeatureContext {
+  group: THREE.Group;
+  animate(fn: (time: number) => void): void;
+  half: [number, number];
+  roads: MapRoad[];
+  neon: number[];
+  fogColor: THREE.Color;
+  fogDensity: number;
+  /** World-space box collider. */
+  addBox(center: THREE.Vector3, size: THREE.Vector3, quat?: THREE.Quaternion): void;
 }
 
 export interface LandmarkContext {

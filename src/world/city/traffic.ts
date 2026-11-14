@@ -17,15 +17,19 @@ interface Kind {
 }
 
 /** Original low-poly traffic designs; body colour comes from the instance colour. */
-function makeKinds(): Kind[] {
+function makeKinds(def: CityDefinition): Kind[] {
+  const N = def.neon;
+  const mix = def.trafficMix;
+  const total = Object.values(mix).reduce((a, b) => a + (b ?? 0), 0) || 1;
+  const share = (k: keyof typeof mix) => (mix[k] ?? 0) / total;
   const W = 0xffffff;
   // decorated bus: tall, slab-sided, strung with lights like a jingle bus
   const bus = mergeGeometries([
     colorBox(2.5, 2.7, 9, 0, 1.75, 0, W),
     colorBox(2.56, 0.7, 8.2, 0, 2.35, 0, 0x05070a),
-    colorBox(2.6, 0.08, 9.05, 0, 3.12, 0, 0xff2bd6, 3),
-    colorBox(2.6, 0.08, 9.05, 0, 0.75, 0, 0xffd23f, 3),
-    colorBox(2.1, 0.5, 0.5, 0, 3.35, -4.2, 0x00f0ff, 2.5),
+    colorBox(2.6, 0.08, 9.05, 0, 3.12, 0, N[1 % N.length], 3),
+    colorBox(2.6, 0.08, 9.05, 0, 0.75, 0, N[2 % N.length], 3),
+    colorBox(2.1, 0.5, 0.5, 0, 3.35, -4.2, N[0], 2.5),
     colorBox(0.4, 0.25, 0.1, -0.85, 1.0, -4.52, HEAD, 6),
     colorBox(0.4, 0.25, 0.1, 0.85, 1.0, -4.52, HEAD, 6),
     colorBox(0.4, 0.2, 0.1, -0.9, 1.0, 4.52, TAIL, 5),
@@ -38,7 +42,7 @@ function makeKinds(): Kind[] {
     colorBox(1.2, 0.6, 0.06, 0, 1.4, 1.1, 0x05070a),
     colorBox(0.08, 0.7, 0.08, -0.58, 1.4, -0.75, 0x101014),
     colorBox(0.08, 0.7, 0.08, 0.58, 1.4, -0.75, 0x101014),
-    colorBox(1.34, 0.05, 2.54, 0, 0.36, 0, 0x4dff9a, 2.5),
+    colorBox(1.34, 0.05, 2.54, 0, 0.36, 0, N[1 % N.length], 2.5),
     colorBox(0.26, 0.2, 0.08, 0, 0.95, -1.27, HEAD, 6),
     colorBox(0.9, 0.1, 0.08, 0, 0.95, 1.27, TAIL, 5),
   ]);
@@ -47,7 +51,7 @@ function makeKinds(): Kind[] {
     colorBox(1.8, 0.55, 4.3, 0, 0.72, 0, W),
     colorBox(1.6, 0.5, 2.1, 0, 1.24, 0.2, 0x06080c),
     colorBox(1.62, 0.06, 2.12, 0, 1.5, 0.2, W),
-    colorBox(1.84, 0.05, 4.34, 0, 0.42, 0, 0x00f0ff, 2.5),
+    colorBox(1.84, 0.05, 4.34, 0, 0.42, 0, N[0], 2.5),
     colorBox(0.36, 0.14, 0.08, -0.6, 0.78, -2.17, HEAD, 6),
     colorBox(0.36, 0.14, 0.08, 0.6, 0.78, -2.17, HEAD, 6),
     colorBox(1.5, 0.1, 0.08, 0, 0.82, 2.17, TAIL, 5),
@@ -59,11 +63,34 @@ function makeKinds(): Kind[] {
     colorBox(0.2, 0.16, 0.08, 0, 1.0, -0.97, HEAD, 6),
     colorBox(0.2, 0.1, 0.08, 0, 0.85, 0.97, TAIL, 5),
   ]);
+  // horse tonga: two big wheels, a canopy, and a horse out front wearing a glowing harness
+  const H = 0x2a1a10;
+  const tonga = mergeGeometries([
+    colorBox(1.5, 0.5, 1.9, 0, 1.0, 1.0, W),
+    colorBox(1.6, 0.08, 2.1, 0, 2.5, 1.0, W),
+    colorBox(0.07, 1.3, 0.07, -0.7, 1.85, 0.1, 0x101014),
+    colorBox(0.07, 1.3, 0.07, 0.7, 1.85, 0.1, 0x101014),
+    colorBox(0.08, 1.3, 1.3, -0.85, 0.65, 1.1, 0x0c0c0e),
+    colorBox(0.08, 1.3, 1.3, 0.85, 0.65, 1.1, 0x0c0c0e),
+    colorBox(0.06, 0.06, 2.2, -0.45, 1.0, -1.0, 0x101014),
+    colorBox(0.06, 0.06, 2.2, 0.45, 1.0, -1.0, 0x101014),
+    colorBox(0.5, 0.6, 1.5, 0, 1.3, -1.6, H),
+    colorBox(0.22, 0.75, 0.3, 0, 1.85, -2.35, H),
+    colorBox(0.2, 0.26, 0.55, 0, 2.2, -2.65, H),
+    colorBox(0.12, 1.0, 0.12, -0.17, 0.5, -1.05, H),
+    colorBox(0.12, 1.0, 0.12, 0.17, 0.5, -1.05, H),
+    colorBox(0.12, 1.0, 0.12, -0.17, 0.5, -2.15, H),
+    colorBox(0.12, 1.0, 0.12, 0.17, 0.5, -2.15, H),
+    colorBox(0.56, 0.08, 0.1, 0, 1.55, -1.3, N[0], 3),
+    colorBox(1.62, 0.06, 0.06, 0, 2.44, 2.02, N[1 % N.length], 3),
+    colorBox(0.14, 0.14, 0.14, 0, 1.3, 2.0, TAIL, 5),
+  ]);
   return [
-    { size: [2.5, 3.2, 9], geo: bus, speed: [7, 11], share: 0.14 },
-    { size: [1.3, 1.8, 2.5], geo: rick, speed: [7, 12], share: 0.34 },
-    { size: [1.8, 1.5, 4.3], geo: car, speed: [9, 15], share: 0.34 },
-    { size: [0.5, 1.7, 1.9], geo: bike, speed: [9, 16], share: 0.18 },
+    { size: [2.5, 3.2, 9], geo: bus, speed: [7, 11], share: share('bus') },
+    { size: [1.3, 1.8, 2.5], geo: rick, speed: [7, 12], share: share('rickshaw') },
+    { size: [1.8, 1.5, 4.3], geo: car, speed: [9, 15], share: share('car') },
+    { size: [0.5, 1.7, 1.9], geo: bike, speed: [9, 16], share: share('bike') },
+    { size: [1.7, 2.6, 5], geo: tonga, speed: [3.5, 6], share: share('tonga') },
   ];
 }
 
@@ -97,7 +124,7 @@ export class Traffic {
   private seed = 99;
 
   constructor(private roads: MapRoad[], def: CityDefinition, world: RAPIER.World, count: number) {
-    const kinds = makeKinds();
+    const kinds = makeKinds(def);
     this.lens = roads.map((r) => polyLength(r.p));
     const key = (x: number, z: number) => `${Math.round(x / 3)},${Math.round(z / 3)}`;
     roads.forEach((r, i) => {

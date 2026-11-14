@@ -1,8 +1,10 @@
 import * as THREE from 'three';
+import { addBoats, addGateJumps, addWater } from '../city/features';
 import type { CityDefinition, LandmarkContext } from '../city/types';
 
-const CYAN = 0x00f0ff;
-const MAGENTA = 0xff2bd6;
+// Lahore glows amber and crimson, never the cool cyan of the coast
+const CYAN = 0xffa630;
+const MAGENTA = 0xff3355;
 const glow = (c: number, k: number) => new THREE.MeshBasicMaterial({ color: new THREE.Color(c).multiplyScalar(k) });
 
 /**
@@ -210,8 +212,24 @@ export const lahore: CityDefinition = {
   blurb: 'Mughal sandstone, thirteen gates, and a sky full of neon kites.',
   codePrefix: 'LHR',
   map: '/cities/lahore/map.json',
-  fog: { color: 0x24101c, density: 0.002 },
-  sky: { horizon: 0x4a1a30, zenith: 0x03020a },
+  fog: { color: 0x8a4a3a, density: 0.0027 },
+  sky: { horizon: 0xb8532f, zenith: 0x1a1430 },
+  // a winter dusk: a huge red sun sinking into smog, every lamp wearing a halo
+  atmosphere: {
+    daylight: 0.42,
+    sun: { dir: [-0.78, 0.15, -0.42], color: 0xff7a3a, size: 3.2, intensity: 1.1 },
+    skyMid: 0x8a3a5a,
+    stars: 0.12,
+    hemi: { sky: 0xb86a6a, ground: 0x3a2418, intensity: 0.75 },
+    ambient: 0.35,
+    halo: 0.95,
+    fogBreath: 0.12,
+  },
+  neon: [0xffa630, 0xff3355, 0xff6a1a, 0xffd23f],
+  architecture: 'mughal',
+  trafficMix: { tonga: 0.2, rickshaw: 0.32, bike: 0.28, car: 0.14, bus: 0.06 },
+  skyLanes: 1,
+  skylineGap: [-Math.PI * 0.75 - 0.55, -Math.PI * 0.75 + 0.55],
   streetLight: 0xffb060,
   facades: [0xb5533c, 0xc4703e, 0xd8b08a, 0xa8452e, 0xd9c7a8, 0x8f5a44, 0xcfa26a, 0xe2d6c2, 0x9fb3a0],
   heritageStone: 0xb04a30,
@@ -225,5 +243,13 @@ export const lahore: CityDefinition = {
   // slower, and in a Bhairavi-like mode
   music: { bpm: 96, root: 69.3, scale: [0, 1, 3, 5, 7, 8, 10], progression: [0, 5, 3, 6] },
   landmarks: { minar, badshahi },
-  ambient: kites,
+  features: (ctx) => {
+    const [hx, hz] = ctx.half;
+    kites(ctx);
+    // the Ravi beyond the north-western edge, with slow boats on it
+    addWater(ctx, [-hx - 1800, -hz - 900, -hx - 62, hz + 900], 0x1a0d0a, 0xff9a50);
+    addBoats(ctx, [-hx - 520, -hz, -hx - 120, hz], 14, 0xffc070);
+    // signature drive: kickers on the big roads, each launching you through a glowing gateway
+    addGateJumps(ctx, 7, ctx.neon[0]);
+  },
 };

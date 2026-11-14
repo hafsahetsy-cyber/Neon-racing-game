@@ -69,7 +69,10 @@ tools           build-city.mjs turns an OpenStreetMap extract into a city map
 1. Add an entry to `CITIES` in `tools/build-city.mjs` (bounding box, landmarks, race waypoints),
    download the extract with the Overpass query in that file's header, and run
    `node tools/build-city.mjs <city>`.
-2. Write a `CityDefinition` in `src/world/cities/` (fog, palette, sign words, driving side, landmarks).
+2. Write a `CityDefinition` in `src/world/cities/`. Every city must feel different, so give it its own:
+   time of day and sky (`atmosphere`), weather (fog, halos), neon colours (`neon`), architecture,
+   water or terrain, traffic mix, something in the sky, and a signature drive. The last four are
+   composed from the set pieces in `src/world/city/features.ts`.
 3. Add it to the list in `src/world/cities/index.ts`. It then appears on the City screen.
 
 ## Credits

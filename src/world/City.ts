@@ -9,7 +9,7 @@ import { buildRoads, drawMiniMap } from './city/roads';
 import { buildStreetLife } from './city/streetlife';
 import { Traffic } from './city/traffic';
 import type { CityDefinition, CityMap } from './city/types';
-import { makeSky, makeTowerMaterial } from './materials';
+import { makeAtmosphereSky, makeTowerMaterial } from './materials';
 import type { World } from './TestTrack';
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -91,7 +91,20 @@ export async function buildCity(world: RAPIER.World, quality: QualitySettings, d
     });
   }
 
-  def.ambient?.({ group, animate: (fn) => animators.push(fn), half: map.half });
+  def.features?.({
+    group,
+    animate: (fn) => animators.push(fn),
+    half: map.half,
+    roads: map.roads,
+    neon: def.neon,
+    fogColor,
+    fogDensity,
+    addBox(center, size, quat) {
+      const d = RAPIER.ColliderDesc.cuboid(size.x / 2, size.y / 2, size.z / 2).setTranslation(center.x, center.y, center.z).setFriction(0.9);
+      if (quat) d.setRotation({ x: quat.x, y: quat.y, z: quat.z, w: quat.w });
+      world.createCollider(d);
+    },
+  });
 
   // ---------------------------------------------------------------- streets, buildings, street life
   const roadGroup = buildRoads(map.roads, grid);
@@ -109,19 +122,25 @@ export async function buildCity(world: RAPIER.World, quality: QualitySettings, d
   group.add(props.group);
   const traffic = new Traffic(map.roads, def, world, Math.round(90 * Math.min(1.3, quality.particles + 0.25)));
   group.add(traffic.group);
-  const life = buildStreetLife(map, grid, occ, world, quality, def.streetLight);
+  const life = buildStreetLife(map, grid, occ, world, quality, def.neon[1 % def.neon.length]);
   group.add(life.group);
 
   // ---------------------------------------------------------------- far skyline + sky + light
-  const towerMat = makeTowerMaterial(fogColor, fogDensity * 0.3);
+  const atm = def.atmosphere;
+  const sunDir = new THREE.Vector3(...atm.sun.dir).normalize();
+  const sunColor = new THREE.Color(atm.sun.color);
+  const towerMat = makeTowerMaterial(fogColor, fogDensity * 0.3, sunColor.clone().multiplyScalar(0.16 * atm.daylight));
   const towers = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), towerMat, quality.skyline);
-  const tints = [0x00f0ff, 0xff2bd6, 0x7a5cff, 0xffa630, 0x39a0ff];
+  const tints = def.neon;
   let seed = 7;
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
   const m4 = new THREE.Matrix4();
   const R0 = Math.hypot(HX, HZ) + 120;
   for (let i = 0; i < quality.skyline; i++) {
-    const a = rnd() * Math.PI * 2;
+    let a = rnd() * Math.PI * 2 - Math.PI;
+    // keep open water clear of towers
+    const gap = def.skylineGap;
+    for (let tries = 0; gap && a > gap[0] && a < gap[1] && tries < 20; tries++) a = rnd() * Math.PI * 2 - Math.PI;
     const r = R0 + rnd() * 900;
     const h = 90 + Math.pow(rnd(), 2) * 520;
     const w = 40 + rnd() * 70;
@@ -135,14 +154,18 @@ export async function buildCity(world: RAPIER.World, quality: QualitySettings, d
   }
   towers.frustumCulled = false;
   group.add(towers);
-  const sky = makeSky(new THREE.Color(def.sky.horizon), new THREE.Color(def.sky.zenith));
+  const sky = makeAtmosphereSky({
+    horizon: new THREE.Color(def.sky.horizon), mid: new THREE.Color(atm.skyMid), zenith: new THREE.Color(def.sky.zenith),
+    sunDir, sunColor: sunColor.clone().multiplyScalar(0.35 + atm.daylight), sunSize: atm.sun.size, stars: atm.stars,
+  });
   group.add(sky);
-  group.add(new THREE.HemisphereLight(0x4a50c8, 0x2a1408, 0.38));
-  const moon = new THREE.DirectionalLight(0x8f88d8, 0.28);
-  moon.position.set(-120, 200, 80);
-  group.add(moon);
-  // warm haze from the street lights
-  group.add(new THREE.AmbientLight(def.streetLight, 0.3));
+  group.add(new THREE.HemisphereLight(atm.hemi.sky, atm.hemi.ground, atm.hemi.intensity));
+  const sun = new THREE.DirectionalLight(sunColor, atm.sun.intensity);
+  sun.position.copy(sunDir).multiplyScalar(300);
+  group.add(sun);
+  // haze lit by the street lights
+  group.add(new THREE.AmbientLight(def.streetLight, atm.ambient));
+  let fogScale = 1;
 
   // ---------------------------------------------------------------- spawn on the nearest main road
   let sp = { d: Infinity, x: 0, z: 0, yaw: 0 };
@@ -175,7 +198,11 @@ export async function buildCity(world: RAPIER.World, quality: QualitySettings, d
         m.envMapIntensity = THREE.MathUtils.lerp(dry[i].e, 0.8, k);
       });
     },
+    get fogScale() {
+      return fogScale;
+    },
     update(dt, time, focus, player) {
+      fogScale = 1 + atm.fogBreath * (0.5 + 0.5 * Math.sin(time * 0.11) * Math.sin(time * 0.037 + 1.3));
       buildings.material.uniforms.uTime.value = time;
       towerMat.uniforms.uTime.value = time;
       (sky.material as THREE.ShaderMaterial).uniforms.uTime.value = time;

@@ -48,7 +48,7 @@ function signAtlas(def: CityDefinition) {
   c.width = 1024;
   c.height = 1024;
   const g = c.getContext('2d')!;
-  const cols = ['#00f0ff', '#ff2bd6', '#ffd23f', '#7dff5a', '#ff5a36', '#b48cff', '#ffffff'];
+  const cols = [...def.neon.map((n) => '#' + n.toString(16).padStart(6, '0')), '#ffffff', '#ffe9c0'];
   g.fillStyle = '#000';
   g.fillRect(0, 0, 1024, 1024);
   for (let i = 0; i < COLS * ROWS; i++) {
@@ -112,6 +112,7 @@ export function buildProps(
   ]);
   const lights: THREE.Matrix4[] = [];
   const pools: { x: number; z: number; s: number; c: THREE.Color }[] = [];
+  const lamps: number[] = [];
   map.roads.forEach((r, ri) => {
     if (r.c > 3) return;
     let i = 0;
@@ -123,6 +124,7 @@ export function buildProps(
       // local +X must point back at the carriageway
       quat.setFromAxisAngle(UP, Math.atan2(nz, -nx));
       lights.push(new THREE.Matrix4().compose(v.set(px, 0, pz), quat, one));
+      lamps.push(px - nx * 2.3, 8.85, pz - nz * 2.3);
       pools.push({ x: x + nx * (r.w / 2 - 2.2), z: z + nz * (r.w / 2 - 2.2), s: 24, c: street.clone().multiplyScalar(0.42) });
     });
   });
@@ -130,6 +132,21 @@ export function buildProps(
   lights.forEach((m, i) => lightMesh.setMatrixAt(i, m));
   lightMesh.frustumCulled = false;
   group.add(lightMesh);
+  // in smog or sea fog every lamp wears a halo
+  if (def.atmosphere.halo > 0.01 && lamps.length) {
+    const hg = new THREE.BufferGeometry();
+    hg.setAttribute('position', new THREE.Float32BufferAttribute(lamps, 3));
+    const halos = new THREE.Points(
+      hg,
+      new THREE.PointsMaterial({
+        map: makeGlowTexture(), color: street.clone().multiplyScalar(0.55 * def.atmosphere.halo), size: 7 + 9 * def.atmosphere.halo,
+        sizeAttenuation: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+      }),
+    );
+    halos.frustumCulled = false;
+    halos.renderOrder = 3;
+    group.add(halos);
+  }
 
   // ------------------------------------------------------------ utility poles + tangled wires (back streets)
   const poleGeo = mergeGeometries([
@@ -328,15 +345,16 @@ export function buildProps(
   group.add(treeMesh);
 
   // ------------------------------------------------------------ sky lanes: streams of flying traffic overhead
-  const LANES = 6;
+  const LANES = def.skyLanes;
   const PER = Math.floor(34 * Math.min(1.3, q.particles + 0.2));
   const flyGeo = mergeGeometries([
     colorBox(1.4, 0.5, 3.4, 0, 0, 0, 0x08080c),
     colorBox(1.2, 0.12, 0.1, 0, 0, -1.72, 0xeaf4ff, 6),
     colorBox(1.2, 0.12, 0.1, 0, 0, 1.72, 0xff1030, 6),
-    colorBox(1.5, 0.06, 2.6, 0, -0.28, 0, 0x00f0ff, 2.5),
+    colorBox(1.5, 0.06, 2.6, 0, -0.28, 0, def.neon[0], 2.5),
   ]);
-  const flyers = new THREE.InstancedMesh(flyGeo, new THREE.MeshBasicMaterial({ vertexColors: true }), LANES * PER);
+  const flyers = new THREE.InstancedMesh(flyGeo, new THREE.MeshBasicMaterial({ vertexColors: true }), Math.max(1, LANES * PER));
+  flyers.count = LANES * PER;
   flyers.frustumCulled = false;
   group.add(flyers);
   const R = Math.hypot(map.half[0], map.half[1]) + 300;

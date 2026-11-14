@@ -1,7 +1,8 @@
 import * as THREE from 'three';
+import { addAirships, addBoats, addExpressway, addWater } from '../city/features';
 import type { CityDefinition, LandmarkContext } from '../city/types';
 
-const CYAN = 0x00f0ff;
+const CYAN = 0x00e5d0; // Karachi's teal
 const glow = (c: number, k: number) => new THREE.MeshBasicMaterial({ color: new THREE.Color(c).multiplyScalar(k) });
 
 /**
@@ -154,8 +155,33 @@ export const karachi: CityDefinition = {
   codePrefix: 'KHI',
   music: { bpm: 104, root: 73.42, scale: [0, 1, 4, 5, 7, 8, 10], progression: [0, 0, 1, 6] },
   map: '/cities/karachi/map.json',
-  fog: { color: 0x1a0f26, density: 0.00185 },
-  sky: { horizon: 0x3a1640, zenith: 0x02030a },
+  fog: { color: 0x0f1a2c, density: 0.0019 },
+  sky: { horizon: 0x1e3a58, zenith: 0x02030a },
+  // deep night by the Arabian Sea: cool moonlight, fog banks drifting in off the water
+  atmosphere: {
+    daylight: 0,
+    sun: { dir: [-0.45, 0.62, 0.35], color: 0x9fb4ff, size: 1.3, intensity: 0.28 },
+    skyMid: 0x0c1634,
+    stars: 1,
+    hemi: { sky: 0x3a5ac8, ground: 0x0a1418, intensity: 0.38 },
+    ambient: 0.3,
+    halo: 0.3,
+    fogBreath: 0.55,
+  },
+  neon: [0x00e5d0, 0xff2bd6, 0x7a5cff, 0x39a0ff],
+  architecture: 'colonial',
+  trafficMix: { bus: 0.2, rickshaw: 0.36, car: 0.3, bike: 0.14 },
+  skyLanes: 3,
+  skylineGap: [Math.PI / 2 - 0.95, Math.PI / 2 + 0.95],
+  features: (ctx) => {
+    const [hx, hz] = ctx.half;
+    // the Arabian Sea along the southern edge, fishing boats out on it, cargo airships above
+    addWater(ctx, [-hx - 1400, hz + 62, hx + 1400, hz + 2800], 0x02060c, ctx.neon[0]);
+    addBoats(ctx, [-hx, hz + 110, hx, hz + 620], 26, 0xffd9a0);
+    addAirships(ctx, 3);
+    // signature drive: the Sea Link, an elevated straight above the shoreline
+    addExpressway(ctx, -hx + 220, hx - 220, hz + 36);
+  },
   streetLight: 0xff9a3c,
   facades: [0xd8c9a3, 0xc9a878, 0xd9a59a, 0x9fc7b0, 0x9db8cf, 0xa9a9a4, 0xd1a94a, 0xe6e2d8, 0xb98f6a],
   heritageStone: 0xc89b5e,

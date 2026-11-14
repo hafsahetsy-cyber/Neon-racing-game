@@ -219,7 +219,7 @@ export class Game {
     this.physics.timestep = FIXED_DT;
     this.events = new RAPIER.EventQueue(true);
 
-    this.scene.environment = makeNeonEnvironment(this.renderer);
+    this.scene.environment = makeNeonEnvironment(this.renderer, this.city.neon, new THREE.Color(this.city.sky.zenith).lerp(new THREE.Color(this.city.fog.color), 0.35).getHex());
     // ?world=test loads the Phase 1 proving ground instead of the city
     const testTrack = new URLSearchParams(location.search).get('world') === 'test';
     this.world = testTrack ? buildTestTrack(this.physics, q) : await buildCity(this.physics, q, this.city);
@@ -571,10 +571,8 @@ export class Game {
       this.remotes.update(dt, this.vehicle.position);
       this.hud.remotes = this.remotes.list();
       this.rain.update(dt, this.camera);
-      if (this.rain.amount > 0.005 || this.rain.target > 0) {
-        this.world.setWet?.(this.rain.amount);
-        (this.scene.fog as THREE.FogExp2).density = this.baseFog * (1 + 0.9 * this.rain.amount);
-      }
+      if (this.rain.amount > 0.005 || this.rain.target > 0) this.world.setWet?.(this.rain.amount);
+      (this.scene.fog as THREE.FogExp2).density = this.baseFog * (this.world.fogScale ?? 1) * (1 + 0.9 * this.rain.amount);
     }
     if (this.photo.on) this.aimPhotoCamera();
     this.hud.update(dt, this.vehicle);

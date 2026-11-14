@@ -4,12 +4,13 @@ import * as THREE from 'three';
  * Instanced tower material: procedural lit windows computed in world space, so one
  * unit box can be scaled to any size without stretching. Reused by every city.
  */
-export function makeTowerMaterial(fogColor: THREE.Color, fogDensity: number) {
+export function makeTowerMaterial(fogColor: THREE.Color, fogDensity: number, ambient = new THREE.Color(0)) {
   return new THREE.ShaderMaterial({
     uniforms: {
       uFogColor: { value: fogColor },
       uFogDensity: { value: fogDensity },
       uTime: { value: 0 },
+      uAmbient: { value: ambient },
     },
     vertexShader: /* glsl */ `
       varying vec3 vWorld;
@@ -32,6 +33,7 @@ export function makeTowerMaterial(fogColor: THREE.Color, fogDensity: number) {
       uniform vec3 uFogColor;
       uniform float uFogDensity;
       uniform float uTime;
+      uniform vec3 uAmbient;
       varying vec3 vWorld;
       varying vec3 vNormalW;
       varying vec3 vTint;
@@ -40,7 +42,7 @@ export function makeTowerMaterial(fogColor: THREE.Color, fogDensity: number) {
       float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       void main() {
         vec3 n = normalize(vNormalW);
-        vec3 col = vec3(0.012, 0.012, 0.022);
+        vec3 col = vec3(0.012, 0.012, 0.022) + uAmbient * (0.5 + 0.5 * abs(n.x));
         if (abs(n.y) < 0.5) {
           float h = abs(n.x) > 0.5 ? vWorld.z : vWorld.x;
           vec2 g = vec2(h / 4.0, vWorld.y / 4.5);
@@ -111,9 +113,11 @@ export function makeSky(horizon: THREE.Color, zenith: THREE.Color) {
 }
 
 /** Small emissive scene baked to an env map so chrome and wet tarmac pick up neon reflections. */
-export function makeNeonEnvironment(renderer: THREE.WebGLRenderer): THREE.Texture {
+/** `neon` = the city's colours, so chrome and wet tarmac reflect the right city. */
+export function makeNeonEnvironment(renderer: THREE.WebGLRenderer, neon: number[] = [0x00f0ff, 0xff2bd6, 0x7a5cff], sky = 0x05030c): THREE.Texture {
+  const [A, B, C] = [neon[0], neon[1 % neon.length], neon[2 % neon.length]];
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x05030c);
+  scene.background = new THREE.Color(sky);
   const add = (color: number, intensity: number, pos: [number, number, number], size: [number, number, number]) => {
     const m = new THREE.Mesh(
       new THREE.BoxGeometry(...size),
@@ -122,14 +126,62 @@ export function makeNeonEnvironment(renderer: THREE.WebGLRenderer): THREE.Textur
     m.position.set(...pos);
     scene.add(m);
   };
-  add(0x00f0ff, 6, [-18, 6, -4], [1, 10, 14]);
-  add(0xff2bd6, 6, [18, 5, 6], [1, 8, 16]);
+  add(A, 6, [-18, 6, -4], [1, 10, 14]);
+  add(B, 6, [18, 5, 6], [1, 8, 16]);
   add(0xffb347, 4, [0, 4, -20], [16, 3, 1]);
-  add(0x7a5cff, 3, [0, 18, 0], [26, 1, 26]);
-  add(0xff2bd6, 3, [6, 3, 20], [10, 2, 1]);
-  add(0x00f0ff, 2, [-8, 10, 18], [3, 14, 1]);
+  add(C, 3, [0, 18, 0], [26, 1, 26]);
+  add(B, 3, [6, 3, 20], [10, 2, 1]);
+  add(A, 2, [-8, 10, 18], [3, 14, 1]);
   const pmrem = new THREE.PMREMGenerator(renderer);
   const tex = pmrem.fromScene(scene, 0.03).texture;
   pmrem.dispose();
   return tex;
+}
+
+/** Sky dome with a three-band gradient, a sun or moon with its glow, and optional stars. */
+export function makeAtmosphereSky(o: {
+  horizon: THREE.Color; mid: THREE.Color; zenith: THREE.Color; sunDir: THREE.Vector3; sunColor: THREE.Color; sunSize: number; stars: number;
+}) {
+  const mat = new THREE.ShaderMaterial({
+    side: THREE.BackSide,
+    depthWrite: false,
+    fog: false,
+    uniforms: {
+      uHorizon: { value: o.horizon }, uMid: { value: o.mid }, uZenith: { value: o.zenith }, uSunDir: { value: o.sunDir },
+      uSunColor: { value: o.sunColor }, uSunSize: { value: o.sunSize }, uStars: { value: o.stars }, uTime: { value: 0 },
+    },
+    vertexShader: /* glsl */ `
+      varying vec3 vDir;
+      void main() {
+        vDir = normalize(position);
+        vec4 p = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        gl_Position = p.xyww;
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform vec3 uHorizon; uniform vec3 uMid; uniform vec3 uZenith; uniform vec3 uSunDir; uniform vec3 uSunColor;
+      uniform float uSunSize; uniform float uStars; uniform float uTime;
+      varying vec3 vDir;
+      float hash(vec3 p) { return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
+      void main() {
+        vec3 d = normalize(vDir);
+        float h = clamp(d.y, 0.0, 1.0);
+        vec3 col = mix(uHorizon, uMid, smoothstep(0.0, 0.2, h));
+        col = mix(col, uZenith, smoothstep(0.1, 0.7, h));
+        col += uHorizon * 0.9 * exp(-h * 11.0);
+        float sd = max(dot(d, uSunDir), 0.0);
+        // disc, tight corona, and a wide wash that lights the haze around it
+        col += uSunColor * (smoothstep(1.0 - 0.0006 * uSunSize, 1.0 - 0.0003 * uSunSize, sd) * 5.0 + pow(sd, 90.0 / uSunSize) * 0.9 + pow(sd, 5.0) * 0.22 * uSunSize);
+        vec3 c = floor(d * 240.0);
+        float s = step(0.9975, hash(c));
+        col += s * uStars * vec3(0.9, 0.95, 1.0) * smoothstep(0.08, 0.5, h) * (0.6 + 0.4 * sin(uTime * 2.0 + hash(c + 1.0) * 40.0));
+        gl_FragColor = vec4(col, 1.0);
+      }
+    `,
+  });
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 16), mat);
+  mesh.scale.setScalar(2000);
+  mesh.frustumCulled = false;
+  mesh.renderOrder = -10;
+  return mesh;
 }

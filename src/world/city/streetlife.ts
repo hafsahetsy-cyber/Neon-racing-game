@@ -159,7 +159,7 @@ export function buildStreetLife(
     colorBox(0.05, 1.35, 0.05, -0.76, 1.56, 0.4, 0x15151a),
     colorBox(0.05, 1.35, 0.05, 0.76, 1.56, 0.4, 0x15151a),
     colorBox(1.9, 0.06, 1.25, 0, 2.25, 0, 0xffffff),
-    colorBox(1.7, 0.07, 0.05, 0, 2.14, -0.62, 0xff2bd6, 3),
+    colorBox(1.7, 0.07, 0.05, 0, 2.14, -0.62, streetLight, 3),
     colorBox(0.11, 0.11, 0.11, 0, 1.98, 0, 0xffe2a8, 6),
   ]);
   const stallMat = new THREE.MeshBasicMaterial({ vertexColors: true });

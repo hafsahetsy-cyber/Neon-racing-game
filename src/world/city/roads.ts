@@ -357,6 +357,7 @@ export function drawMiniMap(roads: MapRoad[], half: [number, number], landmarks:
   pass((r) => r.c >= 4, 'rgba(90,110,160,0.55)', 0.9, 1);
   pass((r) => r.c === 3, 'rgba(0,200,230,0.75)', 1, 1.6);
   pass((r) => r.c <= 2, 'rgba(0,240,255,1)', 1, 2.4);
+  pass((r) => !!r.shortcut, 'rgba(255,166,48,1)', 1, 1.8);
   for (const l of landmarks) {
     g.fillStyle = '#ffa630';
     g.beginPath();

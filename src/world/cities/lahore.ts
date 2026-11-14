@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { addBoats, addGateJumps, addWater } from '../city/features';
+import { addFoodGrills, addKiteSellers, addShortcutLanes } from '../city/streetpieces';
 import type { CityDefinition, LandmarkContext } from '../city/types';
 
 // Lahore glows amber and crimson, never the cool cyan of the coast
@@ -251,5 +252,10 @@ export const lahore: CityDefinition = {
     addBoats(ctx, [-hx - 520, -hz, -hx - 120, hz], 14, 0xffc070);
     // signature drive: kickers on the big roads, each launching you through a glowing gateway
     addGateJumps(ctx, 7, ctx.neon[0]);
+    // the galis that really are quicker: lit, signed, and amber on the mini-map
+    addShortcutLanes(ctx, 40, 'گلی · SHORTCUT');
+    // street life: charcoal grills smoking along Food Street and the lanes, and kite sellers
+    addFoodGrills(ctx, 90);
+    addKiteSellers(ctx, 16);
   },
 };

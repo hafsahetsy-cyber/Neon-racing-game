@@ -10,6 +10,8 @@ export interface MapRoad {
   n: string;
   /** Flat [x, z, x, z, …] polyline in metres. */
   p: number[];
+  /** Marked at runtime: a back lane that cuts between main roads (drawn amber on the mini-map). */
+  shortcut?: boolean;
 }
 export interface MapBuilding {
   /** 0 old city · 1 neon megatower · 2 heritage · 3 modern plaza */

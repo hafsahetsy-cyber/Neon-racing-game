@@ -17,6 +17,15 @@ const CITIES = {
       { id: 'mazar', name: 'Mazar-e-Quaid', lat: 24.8753, lon: 67.0409, clear: 120 },
       { id: 'empress', name: 'Empress Market', lat: 24.8627, lon: 67.0289, clear: 58 },
     ],
+    // race routes: [lat, lon] waypoints, joined along real roads
+    routes: [
+      { name: 'SADDAR SPRINT', blurb: 'A quick loop of the old bazaar streets.',
+        via: [[24.8627, 67.0302], [24.8612, 67.0252], [24.8560, 67.0290], [24.8600, 67.0335], [24.8627, 67.0302]] },
+      { name: 'MAZAR RUN', blurb: 'Empress Market to the mausoleum, flat out.',
+        via: [[24.8627, 67.0302], [24.8725, 67.0355], [24.8745, 67.0395]] },
+      { name: 'OLD CITY GRAND TOUR', blurb: 'Every district, one long lap.',
+        via: [[24.8627, 67.0302], [24.8545, 67.0225], [24.8520, 67.0305], [24.8600, 67.0400], [24.8725, 67.0355], [24.8765, 67.0240], [24.8627, 67.0302]] },
+    ],
   },
 };
 
@@ -85,6 +94,7 @@ const osm = JSON.parse(fs.readFileSync(city.src, 'utf8'));
 
 // ------------------------------------------------------------------ roads
 const roads = [];
+const graphRuns = []; // unsimplified geometry, so junction vertices survive for route finding
 for (const e of osm.elements) {
   const t = e.tags ?? {};
   if (!t.highway || !(t.highway in CLASSES) || !e.geometry) continue;
@@ -108,6 +118,7 @@ for (const e of osm.elements) {
   if (t.highway === 'pedestrian') w = 6;
   const name = t['name:en'] ?? t.name ?? '';
   for (const r of runs) {
+    if (c <= 4 && t.highway !== 'pedestrian') graphRuns.push({ c, pts: r });
     const s = simplify(r, 0.4);
     let len = 0;
     for (let i = 1; i < s.length; i++) len += Math.hypot(s[i][0] - s[i - 1][0], s[i][1] - s[i - 1][1]);
@@ -218,6 +229,95 @@ for (const e of osm.elements) {
   if (poly.length >= 3 && poly.some((p) => inside(p))) parks.push(poly.flat().map(r1));
 }
 
+// ------------------------------------------------------------------ race routes
+// Checkpoint routes follow the real road network: shortest path between named waypoints,
+// with a checkpoint dropped every ~280 m.
+function buildRoutes(defs) {
+  const nodes = new Map(); // key -> { x, z, edges: [[key, cost]] }
+  const nk = (p) => `${Math.round(p[0])},${Math.round(p[1])}`;
+  const node = (p) => {
+    const k = nk(p);
+    if (!nodes.has(k)) nodes.set(k, { x: p[0], z: p[1], edges: [] });
+    return k;
+  };
+  for (const g of graphRuns) {
+    const w = g.c <= 2 ? 1 : g.c === 3 ? 1.25 : 1.9; // prefer main roads
+    for (let i = 1; i < g.pts.length; i++) {
+      const a = node(g.pts[i - 1]), b = node(g.pts[i]);
+      if (a === b) continue;
+      const d = Math.hypot(g.pts[i][0] - g.pts[i - 1][0], g.pts[i][1] - g.pts[i - 1][1]) * w;
+      nodes.get(a).edges.push([b, d]);
+      nodes.get(b).edges.push([a, d]);
+    }
+  }
+  const mainKeys = new Set();
+  for (const g of graphRuns) if (g.c <= 3) for (const p of g.pts) mainKeys.add(nk(p));
+  const nearest = (x, z) => {
+    let best = null, bd = Infinity;
+    for (const k of mainKeys) {
+      const n = nodes.get(k);
+      const d = Math.hypot(n.x - x, n.z - z);
+      if (d < bd) { bd = d; best = k; }
+    }
+    return best;
+  };
+  const path = (from, to) => {
+    const dist = new Map([[from, 0]]);
+    const prev = new Map();
+    const heap = [[0, from]];
+    while (heap.length) {
+      let mi = 0;
+      for (let i = 1; i < heap.length; i++) if (heap[i][0] < heap[mi][0]) mi = i;
+      const [d, k] = heap.splice(mi, 1)[0];
+      if (k === to) break;
+      if (d > (dist.get(k) ?? Infinity)) continue;
+      for (const [nb, c] of nodes.get(k).edges) {
+        const nd = d + c;
+        if (nd < (dist.get(nb) ?? Infinity)) { dist.set(nb, nd); prev.set(nb, k); heap.push([nd, nb]); }
+      }
+    }
+    if (!prev.has(to)) return null;
+    const out = [];
+    for (let k = to; k; k = prev.get(k)) out.push([nodes.get(k).x, nodes.get(k).z]);
+    return out.reverse();
+  };
+  const routes = [];
+  for (const def of defs) {
+    const keys = def.via.map(([lat, lon]) => nearest(...proj(lat, lon)));
+    let line = [];
+    let ok = true;
+    for (let i = 1; i < keys.length; i++) {
+      const seg = path(keys[i - 1], keys[i]);
+      if (!seg) { ok = false; break; }
+      line = line.concat(i === 1 ? seg : seg.slice(1));
+    }
+    if (!ok || line.length < 2) { console.warn('route failed:', def.name); continue; }
+    let total = 0;
+    const cps = [];
+    let next = 280;
+    for (let i = 1; i < line.length; i++) {
+      const d = Math.hypot(line[i][0] - line[i - 1][0], line[i][1] - line[i - 1][1]);
+      while (total + d >= next) {
+        const t = (next - total) / d;
+        cps.push([r1(line[i - 1][0] + (line[i][0] - line[i - 1][0]) * t), r1(line[i - 1][1] + (line[i][1] - line[i - 1][1]) * t)]);
+        next += 280;
+      }
+      total += d;
+    }
+    const end = line[line.length - 1];
+    const last = cps[cps.length - 1];
+    if (last && Math.hypot(last[0] - end[0], last[1] - end[1]) < 120) cps.pop();
+    cps.push([r1(end[0]), r1(end[1])]);
+    // start heading: along the first stretch of the route
+    let k = 1;
+    while (k < line.length - 1 && Math.hypot(line[k][0] - line[0][0], line[k][1] - line[0][1]) < 25) k++;
+    const yaw = Math.atan2(-(line[k][0] - line[0][0]), -(line[k][1] - line[0][1]));
+    routes.push({ name: def.name, blurb: def.blurb, len: Math.round(total), start: [r1(line[0][0]), r1(line[0][1]), Math.round(yaw * 1000) / 1000], cps });
+  }
+  return routes;
+}
+const routes = buildRoutes(city.routes ?? []);
+
 const out = {
   attribution: 'Map data © OpenStreetMap contributors (ODbL)',
   half: [Math.round(HX), Math.round(HZ)],
@@ -225,6 +325,7 @@ const out = {
   roads,
   buildings,
   parks,
+  routes,
 };
 fs.mkdirSync(city.out.replace(/\/[^/]+$/, ''), { recursive: true });
 fs.writeFileSync(city.out, JSON.stringify(out));

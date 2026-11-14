@@ -165,6 +165,7 @@ export async function buildCity(world: RAPIER.World, quality: QualitySettings, d
     fogDensity,
     minimap,
     attribution: map.attribution,
+    routes: map.routes ?? [],
     roadNameAt: (x, z) => grid.nearest(x, z, 3)?.road.n ?? '',
     setWet(k) {
       roadMats.forEach((m, i) => {

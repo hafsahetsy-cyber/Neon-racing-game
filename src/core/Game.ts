@@ -4,6 +4,7 @@ import { EngineAudio } from '../audio/EngineAudio';
 import { Music } from '../audio/Music';
 import { Party, makeCode, normaliseCode } from '../net/Party';
 import { RemotePlayers } from '../net/RemotePlayers';
+import { Race, type Standing, formatTime, rank } from '../race/Race';
 import { vehicleById as vehById } from '../vehicles/registry';
 import { PostFX } from '../effects/PostFX';
 import { Rain } from '../effects/Rain';
@@ -49,6 +50,10 @@ export class Game {
   menu!: Menu;
   readonly party = new Party();
   remotes!: RemotePlayers;
+  readonly race = new Race();
+  private finishes = new Map<string, number>();
+  private newBest = false;
+  private lastTick = 0;
   private switching = 0;
   /** Simulated seconds; exposed for tests. */
   time = 0;
@@ -124,6 +129,26 @@ export class Game {
         await this.party.join(code, this.myInfo());
       },
       leaveParty: () => this.party.leave(),
+      race: () => {
+        const routes = this.world.routes ?? [];
+        const veh = this.vehicle.config.id;
+        const ranked = rank(this.standings());
+        return {
+          routes: routes.map((r) => ({ ...r, best: this.save.best[`${r.name}|${veh}`] ? formatTime(this.save.best[`${r.name}|${veh}`]) : undefined })),
+          blocked: this.party.connected && !this.party.isHost ? 'Only the party host can start a race.' : '',
+          routeName: this.race.route?.name ?? '',
+          results: ranked.map((s, i) => ({ place: i + 1, name: s.name, time: s.time !== undefined ? formatTime(s.time) : 'still racing', self: s.self })),
+          newBest: this.newBest,
+        };
+      },
+      startRace: (i) => {
+        if (this.party.connected) {
+          if (!this.party.isHost) return;
+          this.party.send('race', { r: i });
+        }
+        this.beginRace(i);
+      },
+      endRace: () => this.race.stop(),
       raining: () => this.rain.target > 0,
       setRain: (on) => (this.rain.target = on ? 1 : 0),
     });
@@ -215,11 +240,95 @@ export class Game {
       if (line.from !== this.party.id) this.remotes.say(line.from, line.text);
     };
     this.hud.onChatSend = (text) => this.party.chat(text);
+
+    // ---- race
+    this.scene.add(this.race.group);
+    this.party.onEvent = (event, from, payload) => {
+      if (event === 'race' && from === this.party.host?.id) this.beginRace((payload as { r: number }).r);
+      else if (event === 'fin') {
+        this.finishes.set(from, (payload as { t: number }).t);
+        this.menu.refresh();
+      }
+    };
+    this.race.onEvent = (e, race) => {
+      if (e === 'go') this.audio.blip(880, 0.5);
+      else if (e === 'checkpoint') {
+        this.audio.blip(660);
+        this.hud.toast(`CHECKPOINT ${race.cp}/${race.route!.cps.length}`);
+      } else {
+        this.audio.blip(990, 0.6);
+        const key = `${race.route!.name}|${this.vehicle.config.id}`;
+        const prev = this.save.best[key];
+        this.newBest = !prev || race.finishTime < prev;
+        if (this.newBest) {
+          this.save.best[key] = race.finishTime;
+          storeSave(this.save);
+        }
+        this.finishes.set(this.party.id, race.finishTime);
+        this.party.send('fin', { t: race.finishTime });
+        this.setMode('menu');
+        this.menu.show('results');
+      }
+    };
     const invite = normaliseCode(new URLSearchParams(location.search).get('party') ?? '');
     if (invite) {
       this.menu.pendingCode = invite;
       this.menu.show('party');
     }
+  }
+
+  /** Start a race for this player (the host has already told everyone else). */
+  private beginRace(index: number) {
+    const route = this.world.routes?.[index];
+    if (!route) return;
+    const ids = this.party.connected ? this.party.players.map((p) => p.id).sort() : [this.party.id];
+    this.finishes.clear();
+    this.remotes.resetRace();
+    this.newBest = false;
+    this.lastTick = 0;
+    this.race.start(route, index, this.vehicle, Math.max(0, ids.indexOf(this.party.id)));
+    this.menu.show('none');
+    this.setMode('drive');
+    this.hud.toast(route.name);
+  }
+
+  private standings(): Standing[] {
+    const self: Standing = {
+      id: this.party.id, name: this.save.name, cp: this.race.cp, dist: this.race.distToNext,
+      time: this.finishes.get(this.party.id), self: true,
+    };
+    const others = this.party.players
+      .filter((p) => p.id !== this.party.id)
+      .map((p): Standing => {
+        const r = this.remotes.raceOf(p.id) ?? { cp: 0, dist: 9999 };
+        return { id: p.id, name: p.name, cp: r.cp, dist: r.dist, time: this.finishes.get(p.id), self: false };
+      });
+    return [self, ...others];
+  }
+
+  private updateRaceHud() {
+    const race = this.race;
+    this.hud.raceTarget = race.target();
+    if (!race.active || !race.route) return this.hud.setRace(null);
+    const ranked = rank(this.standings());
+    let countdown = '';
+    if (race.phase === 'countdown') {
+      const n = Math.ceil(race.clock);
+      countdown = n <= 3 ? String(n) : '';
+      if (n <= 3 && n !== this.lastTick) {
+        this.lastTick = n;
+        this.audio.blip(440);
+      }
+    } else if (race.clock < 1) countdown = 'GO!';
+    this.hud.setRace({
+      pos: ranked.findIndex((s) => s.self) + 1,
+      of: ranked.length,
+      cp: race.cp,
+      cps: race.route.cps.length,
+      time: race.phase === 'racing' ? formatTime(race.clock) : '0:00.00',
+      countdown,
+      list: ranked.length > 1 ? ranked.slice(0, 8).map((s, i) => `${i + 1}  ${s.name}`) : [],
+    });
   }
 
   private myInfo() {
@@ -320,7 +429,7 @@ export class Game {
       this.acc += dt;
       let steps = 0;
       while (this.acc >= FIXED_DT && steps < 5) {
-        this.vehicle.step(FIXED_DT, this.mode === 'drive' ? this.input.state : PARKED);
+        this.vehicle.step(FIXED_DT, this.mode === 'drive' && !this.race.holding ? this.input.state : PARKED);
         this.physics.step(this.events);
         this.vehicle.postStep();
         this.events.drainContactForceEvents((e) => {
@@ -342,7 +451,12 @@ export class Game {
         this.hud.setRoadName(this.world.roadNameAt(this.vehicle.position.x, this.vehicle.position.z));
       }
       this.fx.update(dt, this.camera, this.renderer.domElement.height);
-      this.party.update(dt, this.vehicle, this.mode === 'drive' && this.input.state.horn);
+      this.race.update(dt, this.vehicle);
+      this.updateRaceHud();
+      this.party.update(
+        dt, this.vehicle, this.mode === 'drive' && this.input.state.horn,
+        this.race.phase !== 'idle' ? [this.race.cp, Math.round(this.race.distToNext)] : undefined,
+      );
       this.remotes.update(dt, this.vehicle.position);
       this.hud.remotes = this.remotes.list();
       this.rain.update(dt, this.camera);

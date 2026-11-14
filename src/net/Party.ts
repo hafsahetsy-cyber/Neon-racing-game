@@ -114,7 +114,7 @@ export class Party {
   }
 
   /** Call every frame; sends position updates at a rate that fits the server's message budget. */
-  update(dt: number, v: Vehicle, horn: boolean) {
+  update(dt: number, v: Vehicle, horn: boolean, extra?: number[]) {
     if (!this.transport || this.players.length < 2) return;
     this.sendTimer -= dt;
     const moving = v.speed > 0.3 || horn;
@@ -131,6 +131,7 @@ export class Party {
     this.transport.send('s', [
       r(p.x), r(p.y), r(p.z), r(q.x, 1000), r(q.y, 1000), r(q.z, 1000), r(q.w, 1000),
       r(v.velocity.x, 10), r(v.velocity.y, 10), r(v.velocity.z, 10), r(v.steer, 10), flags,
+      ...(extra ?? []),
     ]);
   }
 }

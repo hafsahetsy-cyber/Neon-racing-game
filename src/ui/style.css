@@ -96,7 +96,7 @@ html, body {
 .hud.off { display: none; }
 .menu { position: absolute; inset: 0; pointer-events: none; }
 .menu > * { pointer-events: auto; }
-.menu[data-screen='title'], .menu[data-screen='pause'], .menu[data-screen='settings'], .menu[data-screen='party'] {
+.menu[data-screen='title'], .menu[data-screen='pause'], .menu[data-screen='settings'], .menu[data-screen='party'], .menu[data-screen='race'], .menu[data-screen='results'] {
   background: radial-gradient(ellipse at 50% 45%, rgba(5, 3, 12, 0.25) 0%, rgba(5, 3, 12, 0.82) 100%);
 }
 .title { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
@@ -177,3 +177,29 @@ html, body {
 .err { color: #ff6b7a; font: 12px 'Segoe UI', system-ui, sans-serif; min-height: 16px; }
 .note { font: 12px 'Segoe UI', system-ui, sans-serif; opacity: 0.6; }
 @media (max-width: 760px) { .chat { bottom: 150px; width: 200px; left: 8px; } }
+
+/* ---------------------------------------------------------------- race */
+.race { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); text-align: center; padding: 6px 18px 8px;
+  background: rgba(5, 3, 12, 0.6); border-bottom: 2px solid var(--amber); min-width: 220px; }
+.race-pos { font-size: 34px; font-weight: 900; font-style: italic; line-height: 1; text-shadow: 0 0 14px var(--amber); }
+.race-pos small { font-size: 14px; } .race-pos i { font-size: 14px; opacity: 0.6; font-style: normal; }
+.race-info { display: flex; justify-content: space-between; gap: 18px; font-size: 11px; letter-spacing: 0.18em; margin-top: 4px; }
+.race-list { margin-top: 6px; font: 12px 'Segoe UI', system-ui, sans-serif; white-space: pre; text-align: left; opacity: 0.85; }
+.count { position: absolute; top: 30%; left: 50%; transform: translate(-50%, -50%); font-size: 140px; font-weight: 900; font-style: italic;
+  color: var(--amber); text-shadow: 0 0 40px var(--amber); opacity: 0; pointer-events: none; }
+.count.pop { animation: countpop 0.9s ease-out forwards; }
+@keyframes countpop { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1.6); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); } }
+.routes { display: flex; flex-direction: column; gap: 8px; }
+.route { text-align: left; padding: 10px 14px; cursor: pointer; color: #fff; background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.2); font-family: var(--font); }
+.route.on { border-color: var(--amber); background: rgba(255, 166, 48, 0.14); box-shadow: 0 0 12px rgba(255, 166, 48, 0.35); }
+.route b { display: block; font-size: 15px; letter-spacing: 0.15em; }
+.route span { font: 12px 'Segoe UI', system-ui, sans-serif; opacity: 0.7; }
+.results { width: 100%; border-collapse: collapse; font: 14px 'Segoe UI', system-ui, sans-serif; }
+.results td { padding: 6px 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+.results td:first-child { width: 34px; color: var(--amber); font-family: var(--font); font-weight: 800; }
+.results td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+.results tr.me td { color: var(--cyan); }
+@media (max-width: 760px) { .race { top: 34px; min-width: 150px; } .race-list { display: none; } .count { font-size: 90px; } }
+
+.btn:disabled { opacity: 0.35; cursor: default; box-shadow: none; }

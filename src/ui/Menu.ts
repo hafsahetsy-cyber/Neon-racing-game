@@ -1,7 +1,16 @@
 import { QUALITY, QUALITY_ORDER, type QualityLevel } from '../core/Quality';
 import type { VehicleConfig } from '../vehicles/VehicleConfig';
 
-export type Screen = 'title' | 'garage' | 'pause' | 'settings' | 'party' | 'none';
+export type Screen = 'title' | 'garage' | 'pause' | 'settings' | 'party' | 'race' | 'results' | 'none';
+
+export interface RaceView {
+  routes: { name: string; blurb: string; len: number; best?: string }[];
+  /** Why the player cannot start a race, or '' if they can. */
+  blocked: string;
+  routeName: string;
+  results: { place: number; name: string; time: string; self: boolean }[];
+  newBest: boolean;
+}
 
 export interface PartyView {
   code: string;
@@ -24,6 +33,9 @@ export interface MenuHost {
   volumes(): { music: number; sfx: number };
   setVolumes(music: number, sfx: number): void;
   party(): PartyView;
+  race(): RaceView;
+  startRace(route: number): void;
+  endRace(): void;
   playerName(): string;
   setName(name: string): void;
   createParty(): Promise<void>;
@@ -43,6 +55,7 @@ export class Menu {
   private root: HTMLElement;
   private back: Screen = 'title';
   private error = '';
+  private routePick = 0;
   private busy = false;
   /** Pre-filled join code (from a shared ?party= link). */
   pendingCode = '';
@@ -88,6 +101,7 @@ export class Menu {
 
   /** Re-draw after the roster changes, unless the player is mid-typing. */
   refresh() {
+    if (this.screen === 'results' || this.screen === 'race') this.render();
     if (this.screen === 'party' && document.activeElement?.tagName !== 'INPUT') this.render();
   }
 
@@ -114,6 +128,10 @@ export class Menu {
       case 'garage': this.back = this.screen; this.show('garage'); break;
       case 'settings': this.back = this.screen; this.show('settings'); break;
       case 'party': this.back = this.screen; this.error = ''; this.show('party'); break;
+      case 'race': if (this.screen !== 'party') this.back = this.screen; this.show('race'); break;
+      case 'route': this.routePick = +val!; this.render(); break;
+      case 'startrace': h.startRace(this.routePick); break;
+      case 'endrace': h.endRace(); this.show('none'); h.drive(); break;
       case 'create': void this.net(() => h.createParty()); break;
       case 'join': void this.net(() => h.joinParty(this.pendingCode)); break;
       case 'leave': h.leaveParty(); this.render(); break;
@@ -149,6 +167,7 @@ export class Menu {
           <div class="city">NEO KARACHI · SADDAR · 2099</div>
           <div class="btns">
             <button class="btn primary" data-act="drive">DRIVE</button>
+            <button class="btn" data-act="race">RACE</button>
             <button class="btn" data-act="party">PARTY</button>
             <button class="btn" data-act="garage">GARAGE</button>
             <button class="btn" data-act="settings">SETTINGS</button>
@@ -162,6 +181,7 @@ export class Menu {
         <div class="panel centre">
           <h2>PAUSED</h2>
           <button class="btn primary" data-act="resume">RESUME</button>
+          <button class="btn" data-act="race">RACE</button>
           <button class="btn" data-act="party">PARTY</button>
           <button class="btn" data-act="garage">GARAGE</button>
           <button class="btn" data-act="settings">SETTINGS</button>
@@ -181,6 +201,32 @@ export class Menu {
           <label>WEATHER</label>
           <div class="row"><button class="chip ${h.raining() ? '' : 'on'}" data-act="rain">CLEAR</button><button class="chip ${h.raining() ? 'on' : ''}" data-act="rain">MONSOON</button></div>
           <button class="btn" data-act="back">BACK</button>
+        </div>`;
+      return;
+    }
+    if (this.screen === 'race') {
+      const r = h.race();
+      this.root.innerHTML = `
+        <div class="panel centre wide">
+          <h2>RACE</h2>
+          <div class="routes">${r.routes.map((x, i) => `<button class="route ${i === this.routePick ? 'on' : ''}" data-act="route" data-val="${i}"><b>${x.name}</b><span>${(x.len / 1000).toFixed(1)} km · ${x.blurb}${x.best ? ' · best ' + x.best : ''}</span></button>`).join('') || '<div class="note">No routes in this world.</div>'}</div>
+          <div class="err">${r.blocked}</div>
+          <div class="row end">
+            <button class="btn" data-act="back">BACK</button>
+            <button class="btn primary" data-act="startrace" ${r.blocked || !r.routes.length ? 'disabled' : ''}>START RACE</button>
+          </div>
+        </div>`;
+      return;
+    }
+    if (this.screen === 'results') {
+      const r = h.race();
+      const safe = (s: string) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!);
+      this.root.innerHTML = `
+        <div class="panel centre wide">
+          <h2>FINISH</h2>
+          <div class="note">${safe(r.routeName)}${r.newBest ? ' · NEW PERSONAL BEST' : ''}</div>
+          <table class="results">${r.results.map((x) => `<tr class="${x.self ? 'me' : ''}"><td>${x.place}</td><td>${safe(x.name)}</td><td>${x.time}</td></tr>`).join('')}</table>
+          <div class="row end"><button class="btn primary" data-act="endrace">BACK TO CRUISE</button></div>
         </div>`;
       return;
     }
@@ -211,6 +257,7 @@ export class Menu {
             <div class="row">
               <button class="btn" data-act="copy">COPY LINK</button>
               <button class="btn" data-act="leave">LEAVE</button>
+              <button class="btn" data-act="race">RACE</button>
               <button class="btn primary" data-act="drive">DRIVE</button>
             </div>
           </div>`;

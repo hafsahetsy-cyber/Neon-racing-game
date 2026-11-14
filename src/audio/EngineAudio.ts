@@ -127,6 +127,21 @@ export class EngineAudio {
     for (const n of [this.osc1, this.osc2, this.sub, this.lfo, noise]) n.start();
   }
 
+  /** Short UI tone (countdown, checkpoint). */
+  blip(freq: number, dur = 0.14) {
+    const ctx = this.ctx;
+    if (!ctx || this.muted) return;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = 'triangle';
+    o.frequency.value = freq;
+    g.gain.setValueAtTime(0.25 * this.volume, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+    o.connect(g).connect(ctx.destination);
+    o.start();
+    o.stop(ctx.currentTime + dur + 0.02);
+  }
+
   /** Another player's horn, quieter with distance. */
   remoteHorn(distance: number) {
     const ctx = this.ctx;

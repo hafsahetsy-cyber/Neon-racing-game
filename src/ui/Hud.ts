@@ -44,6 +44,12 @@ export class Hud {
       </div>
       <div class="attrib" data-attrib></div>
       <div class="party-badge" data-party hidden></div>
+      <div class="race" data-race hidden>
+        <div class="race-pos" data-rpos></div>
+        <div class="race-info"><span data-rcp></span><span data-rtime></span></div>
+        <div class="race-list" data-rlist></div>
+      </div>
+      <div class="count" data-count></div>
       <div class="chat" data-chat hidden>
         <div class="chat-log" data-chatlog></div>
         <input class="chat-in" data-chatin maxlength="140" placeholder="Enter: chat · 1-4: emotes" aria-label="Party chat message" />
@@ -120,6 +126,16 @@ export class Hud {
     g.scale(zoom, zoom);
     g.translate(-(v.position.x + m.half[0]) * m.scale, -(v.position.z + m.half[1]) * m.scale);
     g.drawImage(m.canvas, 0, 0);
+    // next race checkpoint
+    if (this.raceTarget) {
+      g.fillStyle = '#ffa630';
+      g.strokeStyle = '#fff';
+      g.lineWidth = 0.8;
+      g.beginPath();
+      g.arc((this.raceTarget[0] + m.half[0]) * m.scale, (this.raceTarget[1] + m.half[1]) * m.scale, 4.2, 0, 6.3);
+      g.fill();
+      g.stroke();
+    }
     // other players in the party
     for (const r of this.remotes) {
       g.fillStyle = '#' + r.color.toString(16).padStart(6, '0');
@@ -143,6 +159,32 @@ export class Hud {
     g.closePath();
     g.fill();
     g.shadowBlur = 0;
+  }
+
+  raceTarget: [number, number] | null = null;
+  private lastCount = '';
+
+  /** Race read-out. Pass null to hide it. */
+  setRace(r: { pos: number; of: number; cp: number; cps: number; time: string; countdown: string; list: string[] } | null) {
+    const el = this.root.querySelector('[data-race]') as HTMLElement;
+    const count = this.root.querySelector('[data-count]') as HTMLElement;
+    el.hidden = !r;
+    const c = r?.countdown ?? '';
+    if (c !== this.lastCount) {
+      this.lastCount = c;
+      count.textContent = c;
+      count.classList.remove('pop');
+      void count.offsetWidth;
+      if (c) count.classList.add('pop');
+    }
+    if (!r) return;
+    const ord = ['th', 'st', 'nd', 'rd'][r.pos % 10 > 3 || (r.pos % 100 > 10 && r.pos % 100 < 14) ? 0 : r.pos % 10];
+    (this.root.querySelector('[data-rpos]') as HTMLElement).innerHTML = `${r.pos}<small>${ord}</small><i> / ${r.of}</i>`;
+    (this.root.querySelector('[data-rcp]') as HTMLElement).textContent = `CHECKPOINT ${Math.min(r.cp + 1, r.cps)}/${r.cps}`;
+    (this.root.querySelector('[data-rtime]') as HTMLElement).textContent = r.time;
+    const list = this.root.querySelector('[data-rlist]') as HTMLElement;
+    const text = r.list.join('\n');
+    if (list.textContent !== text) list.textContent = text;
   }
 
   /** Other players, drawn on the mini-map. */

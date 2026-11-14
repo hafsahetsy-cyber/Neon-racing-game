@@ -39,6 +39,8 @@ export interface World {
   /** 0 dry .. 1 soaked: roads turn glossy, fog thickens. */
   setWet?(k: number): void;
   attribution?: string;
+  /** Checkpoint race routes available in this world. */
+  routes?: import('../race/Race').Route[];
 }
 
 /**

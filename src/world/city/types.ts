@@ -25,6 +25,7 @@ export interface CityMap {
   roads: MapRoad[];
   buildings: MapBuilding[];
   parks: number[][];
+  routes?: import('../../race/Race').Route[];
 }
 
 /** Everything that makes one city different from another. Adding a city = one of these + a map.json. */

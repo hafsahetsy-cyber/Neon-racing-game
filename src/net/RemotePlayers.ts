@@ -29,6 +29,8 @@ class Remote {
   bubble: THREE.Sprite;
   bubbleTime = 0;
   horn = false;
+  /** Race progress: checkpoints passed and metres to the next one. */
+  race = { cp: 0, dist: 9999 };
   /** The subset of Vehicle that VehicleVisual reads. */
   state: {
     position: THREE.Vector3; quaternion: THREE.Quaternion; steer: number; speed: number; forwardSpeed: number;
@@ -157,7 +159,16 @@ export class RemotePlayers {
       flags: s[11],
     });
     if (r.snaps.length > 12) r.snaps.shift();
+    if (s.length >= 14) r.race = { cp: s[12], dist: s[13] };
     if (r.visual) r.visual.root.visible = true;
+  }
+
+  raceOf(id: string) {
+    return this.remotes.get(id)?.race;
+  }
+
+  resetRace() {
+    for (const r of this.remotes.values()) r.race = { cp: 0, dist: 9999 };
   }
 
   say(from: string, text: string) {

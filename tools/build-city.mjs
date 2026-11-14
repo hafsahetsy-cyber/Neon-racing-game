@@ -27,6 +27,26 @@ const CITIES = {
         via: [[24.8627, 67.0302], [24.8545, 67.0225], [24.8520, 67.0305], [24.8600, 67.0400], [24.8725, 67.0355], [24.8765, 67.0240], [24.8627, 67.0302]] },
     ],
   },
+  lahore: {
+    src: 'tools/data/lahore_osm.json',
+    out: 'public/cities/lahore/map.json',
+    bbox: [31.57, 74.296, 31.598, 74.33],
+    // the Walled City's lanes are far narrower than a normal street, and few footprints are mapped
+    laneWidth: 4.4,
+    infill: true,
+    landmarks: [
+      { id: 'minar', name: 'Minar-e-Pakistan', lat: 31.5925, lon: 74.3095, clear: 70 },
+      { id: 'badshahi', name: 'Badshahi Mosque', lat: 31.588, lon: 74.3098, clear: 120 },
+    ],
+    routes: [
+      { name: 'WALLED CITY DASH', blurb: 'Bhatti Gate to Delhi Gate round the old walls.',
+        via: [[31.5785, 74.3085], [31.5765, 74.314], [31.5775, 74.32], [31.5823, 74.3255]] },
+      { name: 'MINAR LOOP', blurb: 'From the Minar past Data Darbar and back.',
+        via: [[31.5915, 74.312], [31.585, 74.308], [31.579, 74.305], [31.5765, 74.314], [31.5895, 74.319], [31.5915, 74.312]] },
+      { name: 'THIRTEEN GATES', blurb: 'The full circuit of the Walled City.',
+        via: [[31.5915, 74.312], [31.5895, 74.319], [31.586, 74.3265], [31.5823, 74.3255], [31.5775, 74.32], [31.5765, 74.314], [31.5785, 74.3085], [31.585, 74.308], [31.5915, 74.312]] },
+    ],
+  },
 };
 
 const city = CITIES[process.argv[2] ?? 'karachi'];
@@ -113,9 +133,9 @@ for (const e of osm.elements) {
   let lanes = parseFloat(t.lanes);
   if (!Number.isFinite(lanes)) lanes = oneway ? DEF_LANES[c] : Math.max(2, DEF_LANES[c]);
   lanes = Math.min(lanes, 5);
-  let w = c >= 4 ? 5.8 : lanes * 3.5 + 1.2;
+  let w = c >= 4 ? (city.laneWidth ?? 5.8) : lanes * 3.5 + 1.2;
   if (c === 5) w = 4;
-  if (t.highway === 'pedestrian') w = 6;
+  if (t.highway === 'pedestrian') w = city.laneWidth ? city.laneWidth + 1 : 6;
   const name = t['name:en'] ?? t.name ?? '';
   for (const r of runs) {
     if (c <= 4 && t.highway !== 'pedestrian') graphRuns.push({ c, pts: r });
@@ -229,6 +249,108 @@ for (const e of osm.elements) {
   if (poly.length >= 3 && poly.some((p) => inside(p))) parks.push(poly.flat().map(r1));
 }
 
+// ------------------------------------------------------------------ infill
+// Where the map has streets but few building footprints (common outside big-city centres),
+// line the empty frontages with generated buildings so streets still feel enclosed.
+let infilled = 0;
+if (city.infill) {
+  const C = 2; // occupancy cell, metres
+  const GW = Math.ceil((HX * 2 + 80) / C), GH = Math.ceil((HZ * 2 + 80) / C);
+  const occ = new Uint8Array(GW * GH);
+  const ci = (x, z) => {
+    const gx = Math.floor((x + HX + 40) / C), gz = Math.floor((z + HZ + 40) / C);
+    return gx < 0 || gz < 0 || gx >= GW || gz >= GH ? -1 : gz * GW + gx;
+  };
+  const stamp = (x, z, r) => {
+    for (let dx = -r; dx <= r; dx += C) for (let dz = -r; dz <= r; dz += C) {
+      if (dx * dx + dz * dz > r * r + C) continue;
+      const i = ci(x + dx, z + dz);
+      if (i >= 0) occ[i] = 1;
+    }
+  };
+  const fillPoly = (poly) => {
+    let minX = 1e9, maxX = -1e9, minZ = 1e9, maxZ = -1e9;
+    for (const [x, z] of poly) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z); }
+    for (let x = minX; x <= maxX; x += C) for (let z = minZ; z <= maxZ; z += C) {
+      if (!pointInPoly(x, z, poly)) continue;
+      const i = ci(x, z);
+      if (i >= 0) occ[i] = 1;
+    }
+  };
+  for (const r of roads) {
+    const p = r.p;
+    for (let i = 0; i + 3 < p.length; i += 2) {
+      const len = Math.hypot(p[i + 2] - p[i], p[i + 3] - p[i + 1]);
+      const n = Math.max(1, Math.ceil(len / 1.5));
+      for (let k = 0; k <= n; k++) stamp(p[i] + ((p[i + 2] - p[i]) * k) / n, p[i + 1] + ((p[i + 3] - p[i + 1]) * k) / n, r.w / 2 + 0.6);
+    }
+  }
+  const toPoly = (flat) => { const o = []; for (let i = 0; i < flat.length; i += 2) o.push([flat[i], flat[i + 1]]); return o; };
+  for (const b of buildings) fillPoly(toPoly(b.p));
+  for (const pk of parks) fillPoly(toPoly(pk));
+  for (const l of lm) if (l.clear) stamp(l.pos[0], l.pos[1], l.clear);
+
+  const rnd = rng(77123);
+  const tryRect = (cx, cz, ax, az, nx, nz, w, d) => {
+    // corners: frontage along (ax, az), depth along (nx, nz) away from the road
+    const pts = [
+      [cx - (ax * w) / 2, cz - (az * w) / 2],
+      [cx + (ax * w) / 2, cz + (az * w) / 2],
+      [cx + (ax * w) / 2 + nx * d, cz + (az * w) / 2 + nz * d],
+      [cx - (ax * w) / 2 + nx * d, cz - (az * w) / 2 + nz * d],
+    ];
+    for (let u = -w / 2; u <= w / 2; u += C * 0.9) for (let v = 0; v <= d; v += C * 0.9) {
+      const x = cx + ax * u + nx * v, z = cz + az * u + nz * v;
+      if (!inside([x, z], -4)) return null;
+      const i = ci(x, z);
+      if (i < 0 || occ[i]) return null;
+    }
+    return pts;
+  };
+  for (const r of roads) {
+    if (r.c === 0) continue;
+    const major = r.c <= 2;
+    const p = r.p;
+    for (const side of [-1, 1]) {
+      let carry = rnd() * 6;
+      for (let i = 0; i + 3 < p.length; i += 2) {
+        const sx = p[i + 2] - p[i], sz = p[i + 3] - p[i + 1];
+        const len = Math.hypot(sx, sz);
+        if (len < 1) continue;
+        const ax = sx / len, az = sz / len;
+        const nx = -az * side, nz = ax * side;
+        let s = carry;
+        while (s < len) {
+          const w = major ? 12 + rnd() * 14 : 7 + rnd() * 9;
+          if (s + w > len + 3) break;
+          const setback = r.w / 2 + (r.c <= 3 ? 3.2 : 1.0);
+          const cx = p[i] + ax * (s + w / 2) + nx * setback, cz = p[i + 1] + az * (s + w / 2) + nz * setback;
+          let pts = null;
+          for (const d of major ? [22, 14, 9] : [13, 9, 6]) {
+            pts = tryRect(cx, cz, ax, az, nx, nz, w - 0.6, d);
+            if (pts) break;
+          }
+          if (pts) {
+            fillPoly(pts);
+            let area = 0;
+            for (let a = 0, b = 3; a < 4; b = a++) area += pts[b][0] * pts[a][1] - pts[a][0] * pts[b][1];
+            if (area < 0) pts.reverse();
+            const roll = rnd();
+            let style = 0, h = (2 + Math.floor(rnd() * 4)) * 3.3 + rnd();
+            if (major && roll < 0.07) { style = 1; h = 70 + Math.pow(rnd(), 1.6) * 170; }
+            else if (r.c <= 3 && roll < 0.3) { style = 3; h = (6 + Math.floor(rnd() * 8)) * 3.3; }
+            else if (roll > 0.94) { style = 2; h = (2 + Math.floor(rnd() * 2)) * 4.4 + 2; } // the odd haveli
+            buildings.push({ s: style, h: r1(h), p: pts.flat().map(r1) });
+            infilled++;
+          }
+          s += w + (rnd() < 0.12 ? 3 + rnd() * 5 : 0.4);
+        }
+        carry = Math.max(0, s - len);
+      }
+    }
+  }
+}
+
 // ------------------------------------------------------------------ race routes
 // Checkpoint routes follow the real road network: shortest path between named waypoints,
 // with a checkpoint dropped every ~280 m.
@@ -333,5 +455,5 @@ const byClass = [0, 0, 0, 0, 0, 0];
 roads.forEach((r) => byClass[r.c]++);
 const byStyle = [0, 0, 0, 0];
 buildings.forEach((b) => byStyle[b.s]++);
-console.log(`half ${out.half} | roads ${roads.length} ${byClass} | buildings ${buildings.length} (old,tower,heritage,plaza) ${byStyle} evicted ${evicted} | parks ${parks.length} | ${(fs.statSync(city.out).size / 1024).toFixed(0)} KB`);
+console.log(`half ${out.half} | roads ${roads.length} ${byClass} | buildings ${buildings.length} (old,tower,heritage,plaza) ${byStyle} evicted ${evicted} infill ${infilled} | parks ${parks.length} | ${(fs.statSync(city.out).size / 1024).toFixed(0)} KB`);
 console.log(out.landmarks);

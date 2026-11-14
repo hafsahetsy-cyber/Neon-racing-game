@@ -1,7 +1,7 @@
 import { QUALITY, QUALITY_ORDER, type QualityLevel } from '../core/Quality';
 import { type VehicleConfig, realTopSpeed } from '../vehicles/VehicleConfig';
 
-export type Screen = 'title' | 'garage' | 'pause' | 'settings' | 'party' | 'race' | 'results' | 'photo' | 'none';
+export type Screen = 'city' | 'title' | 'garage' | 'pause' | 'settings' | 'party' | 'race' | 'results' | 'photo' | 'none';
 
 export interface RaceView {
   routes: { name: string; blurb: string; len: number; best?: string }[];
@@ -34,6 +34,8 @@ export interface MenuHost {
   setQuality(q: QualityLevel): void;
   volumes(): { music: number; sfx: number };
   setVolumes(music: number, sfx: number): void;
+  cities(): { id: string; name: string; tagline: string; blurb: string; current: boolean }[];
+  selectCity(id: string): void;
   party(): PartyView;
   race(): RaceView;
   startRace(route: number): void;
@@ -134,6 +136,8 @@ export class Menu {
       case 'party': this.back = this.screen; this.error = ''; this.show('party'); break;
       case 'race': if (this.screen !== 'party') this.back = this.screen; this.show('race'); break;
       case 'route': this.routePick = +val!; this.render(); break;
+      case 'city': this.back = 'title'; this.show('city'); break;
+      case 'pickcity': h.selectCity(val!); break;
       case 'startrace': h.startRace(this.routePick); break;
       case 'endrace': h.endRace(); this.show('none'); h.drive(); break;
       case 'photosave': h.savePhoto(); break;
@@ -170,11 +174,12 @@ export class Menu {
       this.root.innerHTML = `
         <div class="title">
           <div class="logo">NEON<span>CRUISE</span></div>
-          <div class="city">NEO KARACHI · SADDAR · 2099</div>
+          <div class="city">${(() => { const c = h.cities().find((x) => x.current); return c ? `${c.name} · ${c.tagline}`.toUpperCase() : ''; })()}</div>
           <div class="btns">
             <button class="btn primary" data-act="drive">DRIVE</button>
             <button class="btn" data-act="race">RACE</button>
             <button class="btn" data-act="party">PARTY</button>
+            <button class="btn" data-act="city">CITY</button>
             <button class="btn" data-act="garage">GARAGE</button>
             <button class="btn" data-act="settings">SETTINGS</button>
           </div>
@@ -208,6 +213,16 @@ export class Menu {
           <label>WEATHER</label>
           <div class="row"><button class="chip ${h.raining() ? '' : 'on'}" data-act="rain">CLEAR</button><button class="chip ${h.raining() ? 'on' : ''}" data-act="rain">MONSOON</button></div>
           <button class="btn" data-act="back">BACK</button>
+        </div>`;
+      return;
+    }
+    if (this.screen === 'city') {
+      this.root.innerHTML = `
+        <div class="panel centre wide">
+          <h2>CITY</h2>
+          <div class="routes">${h.cities().map((c) => `<button class="route ${c.current ? 'on' : ''}" data-act="pickcity" data-val="${c.id}"><b>${c.name}</b><span>${c.tagline} · ${c.blurb}${c.current ? ' · you are here' : ''}</span></button>`).join('')}</div>
+          <div class="note">Changing city reloads the game. Parties are per city.</div>
+          <div class="row end"><button class="btn" data-act="back">BACK</button></div>
         </div>`;
       return;
     }

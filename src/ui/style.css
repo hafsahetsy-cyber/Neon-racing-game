@@ -96,7 +96,7 @@ html, body {
 .hud.off { display: none; }
 .menu { position: absolute; inset: 0; pointer-events: none; }
 .menu > * { pointer-events: auto; }
-.menu[data-screen='title'], .menu[data-screen='pause'], .menu[data-screen='settings'], .menu[data-screen='party'], .menu[data-screen='race'], .menu[data-screen='results'] {
+.menu[data-screen='title'], .menu[data-screen='city'], .menu[data-screen='pause'], .menu[data-screen='settings'], .menu[data-screen='party'], .menu[data-screen='race'], .menu[data-screen='results'] {
   background: radial-gradient(ellipse at 50% 45%, rgba(5, 3, 12, 0.25) 0%, rgba(5, 3, 12, 0.82) 100%);
 }
 .title { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }

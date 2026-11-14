@@ -36,7 +36,8 @@ export class Music {
   /** 0..1 — opens the filter and adds layers as the player goes faster. */
   intensity = 0;
 
-  constructor(private style: MusicStyle = KARACHI_STYLE) {}
+  /** Set before start(); each city brings its own tempo and scale. */
+  style: MusicStyle = KARACHI_STYLE;
 
   get volume() {
     return this._volume;

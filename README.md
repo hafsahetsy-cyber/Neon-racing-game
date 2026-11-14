@@ -70,7 +70,7 @@ tools           build-city.mjs turns an OpenStreetMap extract into a city map
    download the extract with the Overpass query in that file's header, and run
    `node tools/build-city.mjs <city>`.
 2. Write a `CityDefinition` in `src/world/cities/` (fog, palette, sign words, driving side, landmarks).
-3. Pass it to `buildCity` in `src/core/Game.ts`.
+3. Add it to the list in `src/world/cities/index.ts`. It then appears on the City screen.
 
 ## Credits
 

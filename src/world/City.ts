@@ -91,6 +91,8 @@ export async function buildCity(world: RAPIER.World, quality: QualitySettings, d
     });
   }
 
+  def.ambient?.({ group, animate: (fn) => animators.push(fn), half: map.half });
+
   // ---------------------------------------------------------------- streets, buildings, street life
   const roadGroup = buildRoads(map.roads, grid);
   group.add(roadGroup);

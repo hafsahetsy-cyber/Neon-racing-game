@@ -33,6 +33,13 @@ export interface CityDefinition {
   id: string;
   name: string;
   tagline: string;
+  /** One line for the city-select card. */
+  blurb: string;
+  /** Three letters that start this city's party codes, e.g. KHI. */
+  codePrefix: string;
+  music: import('../../audio/Music').MusicStyle;
+  /** Optional city-wide ambience (Lahore's kites, …). */
+  ambient?: (ctx: { group: THREE.Group; animate: (fn: (time: number) => void) => void; half: [number, number] }) => void;
   map: string;
   fog: { color: number; density: number };
   sky: { horizon: number; zenith: number };

@@ -19,7 +19,7 @@ import type { VehicleConfig } from '../vehicles/VehicleConfig';
 import { VehicleVisual } from '../vehicles/VehicleVisual';
 import { makeNeonEnvironment } from '../world/materials';
 import { buildCity } from '../world/City';
-import { karachi } from '../world/cities/karachi';
+import { CITIES, cityByCodePrefix, cityById } from '../world/cities';
 import { buildTestTrack, type World } from '../world/TestTrack';
 import { CameraRig } from './CameraRig';
 import { Input } from './Input';
@@ -46,6 +46,8 @@ export class Game {
   /** 'menu' shows the car in a showroom orbit; 'drive' hands control to the player. */
   mode: 'menu' | 'drive' = 'menu';
   readonly music = new Music();
+  /** The city being played: ?city= in the address wins, then the saved choice. */
+  city = cityById(null);
   readonly save = loadSave();
   menu!: Menu;
   readonly party = new Party();
@@ -83,6 +85,10 @@ export class Game {
       this.audio.start();
       this.music.start();
     };
+    const params = new URLSearchParams(location.search);
+    const invited = cityByCodePrefix((params.get('party') ?? '').toUpperCase().slice(0, 3));
+    this.city = invited ?? cityById(params.get('city') ?? this.save.city);
+    this.music.style = this.city.music;
     this.audio.volume = this.save.sfx;
     this.music.volume = this.save.music;
     this.menu = new Menu(uiRoot, {
@@ -122,10 +128,21 @@ export class Game {
         storeSave(this.save);
         this.party.updateInfo(this.myInfo());
       },
-      createParty: () => this.party.join(makeCode('KHI'), this.myInfo()),
+      createParty: () => this.party.join(makeCode(this.city.codePrefix), this.myInfo()),
+      cities: () => CITIES.map((c) => ({ id: c.id, name: c.name, tagline: c.tagline, blurb: c.blurb, current: c === this.city })),
+      selectCity: (id) => {
+        if (id === this.city.id) return this.menu.show('title');
+        this.gotoCity(id);
+      },
       joinParty: async (raw) => {
         const code = normaliseCode(raw);
         if (!code) throw new Error('Codes look like KHI-7Q2');
+        // a code from another city: go there, with the code ready to join
+        const other = cityByCodePrefix(code.slice(0, 3));
+        if (other && other !== this.city) {
+          this.gotoCity(other.id, code);
+          throw new Error(`Travelling to ${other.name}…`);
+        }
         await this.party.join(code, this.myInfo());
       },
       leaveParty: () => this.party.leave(),
@@ -205,7 +222,7 @@ export class Game {
     this.scene.environment = makeNeonEnvironment(this.renderer);
     // ?world=test loads the Phase 1 proving ground instead of the city
     const testTrack = new URLSearchParams(location.search).get('world') === 'test';
-    this.world = testTrack ? buildTestTrack(this.physics, q) : await buildCity(this.physics, q, karachi);
+    this.world = testTrack ? buildTestTrack(this.physics, q) : await buildCity(this.physics, q, this.city);
     if (this.world.minimap) this.hud.setMiniMap(this.world.minimap);
     if (this.world.attribution) this.hud.setAttribution(this.world.attribution);
     this.scene.add(this.world.group);
@@ -412,6 +429,17 @@ export class Game {
     a.href = this.canvas.toDataURL('image/png');
     a.download = `neon-cruise-${Date.now()}.png`;
     a.click();
+  }
+
+  /** Cities are loaded fresh: save the choice and reload the page into it. */
+  private gotoCity(id: string, partyCode = '') {
+    this.save.city = id;
+    storeSave(this.save);
+    this.party.leave();
+    const q = new URLSearchParams();
+    q.set('city', id);
+    if (partyCode) q.set('party', partyCode);
+    location.search = q.toString();
   }
 
   private myInfo() {

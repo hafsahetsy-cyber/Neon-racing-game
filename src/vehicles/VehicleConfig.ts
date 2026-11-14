@@ -65,3 +65,19 @@ export interface VehicleConfig {
   /** Chase-camera distance multiplier for long vehicles. */
   cameraDistance?: number;
 }
+
+/**
+ * The speed (m/s) a vehicle actually settles at on the flat without boost: where the engine's
+ * tapering push equals aerodynamic drag. Mirrors the constants in Vehicle.step().
+ */
+export function realTopSpeed(c: VehicleConfig): number {
+  let lo = 0;
+  let hi = c.engine.topSpeed;
+  for (let i = 0; i < 30; i++) {
+    const v = (lo + hi) / 2;
+    const push = c.engine.accel * (1 - Math.pow(v / c.engine.topSpeed, 2.6));
+    if (push > 0.00055 * v * v) lo = v;
+    else hi = v;
+  }
+  return lo;
+}

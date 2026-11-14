@@ -139,6 +139,7 @@ export class Game {
           routeName: this.race.route?.name ?? '',
           results: ranked.map((s, i) => ({ place: i + 1, name: s.name, time: s.time !== undefined ? formatTime(s.time) : 'still racing', self: s.self })),
           newBest: this.newBest,
+          active: this.race.active,
         };
       },
       startRace: (i) => {
@@ -148,12 +149,20 @@ export class Game {
         }
         this.beginRace(i);
       },
-      endRace: () => this.race.stop(),
+      endRace: () => {
+        this.race.stop();
+        this.hud.setRace(null);
+        this.hud.raceTarget = null;
+      },
+      savePhoto: () => this.savePhoto(),
+      exitPhoto: () => this.setPhoto(false),
       raining: () => this.rain.target > 0,
       setRain: (on) => (this.rain.target = on ? 1 : 0),
     });
 
     this.input.on((a) => {
+      if (a === 'photo' && (this.photo.on || (this.mode === 'drive' && !this.race.active))) return this.setPhoto(!this.photo.on);
+      if (a === 'pause' && this.photo.on) return this.setPhoto(false);
       if (a === 'pause') {
         if (this.mode === 'drive') {
           this.setMode('menu');
@@ -240,6 +249,8 @@ export class Game {
       if (line.from !== this.party.id) this.remotes.say(line.from, line.text);
     };
     this.hud.onChatSend = (text) => this.party.chat(text);
+
+    this.bindPhotoControls();
 
     // ---- race
     this.scene.add(this.race.group);
@@ -329,6 +340,78 @@ export class Game {
       countdown,
       list: ranked.length > 1 ? ranked.slice(0, 8).map((s, i) => `${i + 1}  ${s.name}`) : [],
     });
+  }
+
+  // ---------------------------------------------------------------- photo mode
+  private photo = { on: false, yaw: 0.6, pitch: 0.22, dist: 7.5, drag: false, x: 0, y: 0 };
+
+  private bindPhotoControls() {
+    const c = this.canvas;
+    c.addEventListener('pointerdown', (e) => {
+      if (!this.photo.on) return;
+      this.photo.drag = true;
+      this.photo.x = e.clientX;
+      this.photo.y = e.clientY;
+      c.setPointerCapture(e.pointerId);
+    });
+    c.addEventListener('pointermove', (e) => {
+      if (!this.photo.on || !this.photo.drag) return;
+      this.photo.yaw -= (e.clientX - this.photo.x) * 0.006;
+      this.photo.pitch = THREE.MathUtils.clamp(this.photo.pitch + (e.clientY - this.photo.y) * 0.004, -0.05, 1.35);
+      this.photo.x = e.clientX;
+      this.photo.y = e.clientY;
+    });
+    const end = () => (this.photo.drag = false);
+    c.addEventListener('pointerup', end);
+    c.addEventListener('pointercancel', end);
+    c.addEventListener('wheel', (e) => {
+      if (!this.photo.on) return;
+      e.preventDefault();
+      this.photo.dist = THREE.MathUtils.clamp(this.photo.dist * (e.deltaY > 0 ? 1.1 : 0.9), 2.5, 60);
+    }, { passive: false });
+  }
+
+  /** Freeze the world and hand the camera to the player. */
+  setPhoto(on: boolean) {
+    this.photo.on = on;
+    this.paused = on;
+    this.hud.setVisible(!on && this.mode === 'drive');
+    if (on) {
+      // start from where the chase camera is, so the framing does not jump
+      const d = this.camera.position.clone().sub(this.vehicle.position);
+      this.photo.dist = THREE.MathUtils.clamp(d.length(), 4, 14);
+      this.photo.yaw = Math.atan2(d.x, d.z);
+      this.photo.pitch = THREE.MathUtils.clamp(Math.asin(d.y / d.length()), 0.05, 1.2);
+      this.menu.show('photo');
+    } else {
+      this.menu.show('none');
+      this.rig.snap();
+    }
+  }
+
+  private aimPhotoCamera() {
+    const p = this.photo;
+    const target = this.vehicle.position.clone();
+    target.y += 0.9;
+    const cp = Math.cos(p.pitch);
+    this.camera.position.set(
+      target.x + Math.sin(p.yaw) * cp * p.dist,
+      Math.max(0.3, target.y + Math.sin(p.pitch) * p.dist),
+      target.z + Math.cos(p.yaw) * cp * p.dist,
+    );
+    this.camera.up.set(0, 1, 0);
+    this.camera.fov = 48;
+    this.camera.updateProjectionMatrix();
+    this.camera.lookAt(target);
+  }
+
+  /** Render one clean frame and download it as a PNG. */
+  savePhoto() {
+    this.frame(0);
+    const a = document.createElement('a');
+    a.href = this.canvas.toDataURL('image/png');
+    a.download = `neon-cruise-${Date.now()}.png`;
+    a.click();
   }
 
   private myInfo() {
@@ -465,6 +548,7 @@ export class Game {
         (this.scene.fog as THREE.FogExp2).density = this.baseFog * (1 + 0.9 * this.rain.amount);
       }
     }
+    if (this.photo.on) this.aimPhotoCamera();
     this.hud.update(dt, this.vehicle);
     this.audio.update(this.vehicle, this.mode === 'drive' && this.input.state.horn, this.paused, this.rain.amount);
     this.music.intensity = this.mode === 'drive' ? Math.min(1, 0.25 + this.vehicle.speed / this.vehicle.config.engine.topSpeed) : 0.15;

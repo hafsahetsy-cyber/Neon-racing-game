@@ -9,7 +9,7 @@ export interface DriveInput {
 }
 
 export type InputAction =
-  | 'reset' | 'camera' | 'help' | 'quality' | 'pause' | 'mute' | 'weather' | 'chat'
+  | 'reset' | 'camera' | 'help' | 'quality' | 'pause' | 'mute' | 'weather' | 'chat' | 'photo'
   | 'emote1' | 'emote2' | 'emote3' | 'emote4';
 
 const typing = (e: Event) => {
@@ -41,6 +41,7 @@ export class Input {
         case 'KeyG': this.emit('quality'); break;
         case 'KeyM': this.emit('mute'); break;
         case 'KeyT': this.emit('weather'); break;
+        case 'KeyP': this.emit('photo'); break;
         case 'Enter': this.emit('chat'); e.preventDefault(); break;
         case 'Digit1': this.emit('emote1'); break;
         case 'Digit2': this.emit('emote2'); break;

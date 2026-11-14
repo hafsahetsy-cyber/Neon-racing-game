@@ -1,4 +1,4 @@
-import { type RealtimeChannel, type SupabaseClient, createClient } from '@supabase/supabase-js';
+import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 
 /** What every player announces about themselves (presence). */
 export interface PlayerInfo {
@@ -40,6 +40,8 @@ export class SupabaseTransport implements Transport {
 
   async join(room: string, me: PlayerInfo) {
     this.me = me;
+    // loaded on demand: solo players never download the realtime client
+    const { createClient } = await import('@supabase/supabase-js');
     this.client ??= createClient(SUPABASE_URL, SUPABASE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
       realtime: { params: { eventsPerSecond: 20 } },

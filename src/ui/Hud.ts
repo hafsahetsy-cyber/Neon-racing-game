@@ -35,7 +35,7 @@ export class Hud {
         <div><b>A D / ← →</b> steer</div><div><b>SPACE</b> handbrake · drift</div>
         <div><b>SHIFT</b> boost</div><div><b>E</b> horn</div>
         <div><b>C</b> camera</div><div><b>R</b> reset car</div>
-        <div><b>ENTER</b> party chat · <b style="min-width:0">1-4</b> emotes</div><div><b>G</b> graphics quality</div><div><b>T</b> toggle rain</div><div><b>M</b> mute · <b>H</b> hide help</div>
+        <div><b>ENTER</b> party chat · <b style="min-width:0">1-4</b> emotes</div><div><b>P</b> photo mode</div><div><b>G</b> graphics quality</div><div><b>T</b> toggle rain</div><div><b>M</b> mute · <b>H</b> hide help</div>
         <div class="pad">Gamepad: RT gas · LT brake · A drift · X boost · Y camera</div>
       </div>
       <div class="map-wrap" data-mapwrap hidden>

@@ -203,3 +203,9 @@ html, body {
 @media (max-width: 760px) { .race { top: 34px; min-width: 150px; } .race-list { display: none; } .count { font-size: 90px; } }
 
 .btn:disabled { opacity: 0.35; cursor: default; box-shadow: none; }
+
+.photo-bar { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); display: flex; align-items: center; gap: 14px;
+  padding: 10px 18px; background: rgba(5, 3, 12, 0.7); border: 1px solid rgba(0, 240, 255, 0.35); }
+.photo-bar span { font-size: 10px; letter-spacing: 0.22em; opacity: 0.75; white-space: nowrap; }
+.photo-bar .btn { padding: 9px 16px; font-size: 12px; white-space: nowrap; }
+@media (max-width: 760px) { .photo-bar span { display: none; } }

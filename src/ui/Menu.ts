@@ -1,7 +1,7 @@
 import { QUALITY, QUALITY_ORDER, type QualityLevel } from '../core/Quality';
-import type { VehicleConfig } from '../vehicles/VehicleConfig';
+import { type VehicleConfig, realTopSpeed } from '../vehicles/VehicleConfig';
 
-export type Screen = 'title' | 'garage' | 'pause' | 'settings' | 'party' | 'race' | 'results' | 'none';
+export type Screen = 'title' | 'garage' | 'pause' | 'settings' | 'party' | 'race' | 'results' | 'photo' | 'none';
 
 export interface RaceView {
   routes: { name: string; blurb: string; len: number; best?: string }[];
@@ -10,6 +10,8 @@ export interface RaceView {
   routeName: string;
   results: { place: number; name: string; time: string; self: boolean }[];
   newBest: boolean;
+  /** A race is in progress for this player. */
+  active: boolean;
 }
 
 export interface PartyView {
@@ -36,6 +38,8 @@ export interface MenuHost {
   race(): RaceView;
   startRace(route: number): void;
   endRace(): void;
+  savePhoto(): void;
+  exitPhoto(): void;
   playerName(): string;
   setName(name: string): void;
   createParty(): Promise<void>;
@@ -132,6 +136,8 @@ export class Menu {
       case 'route': this.routePick = +val!; this.render(); break;
       case 'startrace': h.startRace(this.routePick); break;
       case 'endrace': h.endRace(); this.show('none'); h.drive(); break;
+      case 'photosave': h.savePhoto(); break;
+      case 'photoexit': h.exitPhoto(); break;
       case 'create': void this.net(() => h.createParty()); break;
       case 'join': void this.net(() => h.joinParty(this.pendingCode)); break;
       case 'leave': h.leaveParty(); this.render(); break;
@@ -181,6 +187,7 @@ export class Menu {
         <div class="panel centre">
           <h2>PAUSED</h2>
           <button class="btn primary" data-act="resume">RESUME</button>
+          ${h.race().active ? '<button class="btn" data-act="endrace">QUIT RACE</button>' : ''}
           <button class="btn" data-act="race">RACE</button>
           <button class="btn" data-act="party">PARTY</button>
           <button class="btn" data-act="garage">GARAGE</button>
@@ -201,6 +208,15 @@ export class Menu {
           <label>WEATHER</label>
           <div class="row"><button class="chip ${h.raining() ? '' : 'on'}" data-act="rain">CLEAR</button><button class="chip ${h.raining() ? 'on' : ''}" data-act="rain">MONSOON</button></div>
           <button class="btn" data-act="back">BACK</button>
+        </div>`;
+      return;
+    }
+    if (this.screen === 'photo') {
+      this.root.innerHTML = `
+        <div class="photo-bar">
+          <span>PHOTO MODE · drag to orbit · scroll to zoom</span>
+          <button class="btn primary" data-act="photosave">SAVE PHOTO</button>
+          <button class="btn" data-act="photoexit">EXIT</button>
         </div>`;
       return;
     }
@@ -270,7 +286,7 @@ export class Menu {
       `<div class="stat"><span>${label}</span><div class="bar"><i style="width:${v * 10}%"></i></div></div>`;
     const sw = (act: string, list: number[], cur: number) =>
       list.map((x) => `<button class="sw ${x === cur ? 'on' : ''}" style="--c:${hex(x)}" data-act="${act}" data-val="${x}" aria-label="${act} ${hex(x)}"></button>`).join('');
-    const kmh = Math.round(c.engine.topSpeed * 3.6);
+    const kmh = Math.round(realTopSpeed(c) * 3.6);
     this.root.innerHTML = `
       <div class="garage-top"><h2>GARAGE</h2><div class="count">${h.vehicles.indexOf(c) + 1} / ${h.vehicles.length}</div></div>
       <button class="arrow left" data-act="prev" aria-label="Previous vehicle">◀</button>

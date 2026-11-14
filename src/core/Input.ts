@@ -8,7 +8,14 @@ export interface DriveInput {
   horn: boolean;
 }
 
-export type InputAction = 'reset' | 'camera' | 'help' | 'quality' | 'pause' | 'mute' | 'weather';
+export type InputAction =
+  | 'reset' | 'camera' | 'help' | 'quality' | 'pause' | 'mute' | 'weather' | 'chat'
+  | 'emote1' | 'emote2' | 'emote3' | 'emote4';
+
+const typing = (e: Event) => {
+  const t = e.target as HTMLElement | null;
+  return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA');
+};
 
 export class Input {
   readonly state: DriveInput = { steer: 0, throttle: 0, brake: 0, handbrake: false, boost: false, horn: false };
@@ -23,7 +30,7 @@ export class Input {
 
   constructor() {
     window.addEventListener('keydown', (e) => {
-      if (e.repeat) return;
+      if (e.repeat || typing(e)) return;
       this.gesture();
       this.keys.add(e.code);
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
@@ -34,6 +41,11 @@ export class Input {
         case 'KeyG': this.emit('quality'); break;
         case 'KeyM': this.emit('mute'); break;
         case 'KeyT': this.emit('weather'); break;
+        case 'Enter': this.emit('chat'); e.preventDefault(); break;
+        case 'Digit1': this.emit('emote1'); break;
+        case 'Digit2': this.emit('emote2'); break;
+        case 'Digit3': this.emit('emote3'); break;
+        case 'Digit4': this.emit('emote4'); break;
         case 'Escape': this.emit('pause'); break;
       }
     });

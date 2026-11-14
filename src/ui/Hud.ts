@@ -35,7 +35,7 @@ export class Hud {
         <div><b>A D / ← →</b> steer</div><div><b>SPACE</b> handbrake · drift</div>
         <div><b>SHIFT</b> boost</div><div><b>E</b> horn</div>
         <div><b>C</b> camera</div><div><b>R</b> reset car</div>
-        <div><b>G</b> graphics quality</div><div><b>T</b> toggle rain</div><div><b>M</b> mute · <b>H</b> hide help</div>
+        <div><b>ENTER</b> party chat · <b style="min-width:0">1-4</b> emotes</div><div><b>G</b> graphics quality</div><div><b>T</b> toggle rain</div><div><b>M</b> mute · <b>H</b> hide help</div>
         <div class="pad">Gamepad: RT gas · LT brake · A drift · X boost · Y camera</div>
       </div>
       <div class="map-wrap" data-mapwrap hidden>
@@ -43,6 +43,11 @@ export class Hud {
         <canvas class="minimap" data-map width="180" height="180"></canvas>
       </div>
       <div class="attrib" data-attrib></div>
+      <div class="party-badge" data-party hidden></div>
+      <div class="chat" data-chat hidden>
+        <div class="chat-log" data-chatlog></div>
+        <input class="chat-in" data-chatin maxlength="140" placeholder="Enter: chat · 1-4: emotes" aria-label="Party chat message" />
+      </div>
       <div class="speedo">
         <svg viewBox="0 0 200 200">
           <circle class="track" cx="100" cy="100" r="86" />
@@ -115,6 +120,16 @@ export class Hud {
     g.scale(zoom, zoom);
     g.translate(-(v.position.x + m.half[0]) * m.scale, -(v.position.z + m.half[1]) * m.scale);
     g.drawImage(m.canvas, 0, 0);
+    // other players in the party
+    for (const r of this.remotes) {
+      g.fillStyle = '#' + r.color.toString(16).padStart(6, '0');
+      g.strokeStyle = '#fff';
+      g.lineWidth = 0.6;
+      g.beginPath();
+      g.arc((r.x + m.half[0]) * m.scale, (r.z + m.half[1]) * m.scale, 2.6, 0, 6.3);
+      g.fill();
+      g.stroke();
+    }
     g.restore();
     // player arrow
     g.fillStyle = '#ff2bd6';
@@ -128,6 +143,47 @@ export class Hud {
     g.closePath();
     g.fill();
     g.shadowBlur = 0;
+  }
+
+  /** Other players, drawn on the mini-map. */
+  remotes: { x: number; z: number; color: number }[] = [];
+  /** Called with the text when the player sends a chat line. */
+  onChatSend: (text: string) => void = () => {};
+
+  setParty(code: string, count: number) {
+    const badge = this.root.querySelector('[data-party]') as HTMLElement;
+    const chat = this.root.querySelector('[data-chat]') as HTMLElement;
+    badge.hidden = chat.hidden = !code;
+    badge.textContent = code ? `PARTY ${code} · ${count}/8` : '';
+    const input = this.root.querySelector('[data-chatin]') as HTMLInputElement;
+    if (!input.dataset.bound) {
+      input.dataset.bound = '1';
+      input.addEventListener('keydown', (e) => {
+        e.stopPropagation();
+        if (e.code === 'Enter') {
+          if (input.value.trim()) this.onChatSend(input.value);
+          input.value = '';
+          input.blur();
+        } else if (e.code === 'Escape') input.blur();
+      });
+    }
+  }
+
+  focusChat() {
+    const chat = this.root.querySelector('[data-chat]') as HTMLElement;
+    if (!chat.hidden) (this.root.querySelector('[data-chatin]') as HTMLInputElement).focus();
+  }
+
+  addChat(name: string, text: string, own: boolean) {
+    const log = this.root.querySelector('[data-chatlog]') as HTMLElement;
+    const line = document.createElement('div');
+    line.className = own ? 'own' : '';
+    const b = document.createElement('b');
+    b.textContent = name + ' ';
+    line.append(b, document.createTextNode(text));
+    log.appendChild(line);
+    while (log.children.length > 6) log.firstChild!.remove();
+    setTimeout(() => line.classList.add('old'), 9000);
   }
 
   setVisible(on: boolean) {

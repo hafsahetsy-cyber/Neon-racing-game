@@ -127,6 +127,26 @@ export class EngineAudio {
     for (const n of [this.osc1, this.osc2, this.sub, this.lfo, noise]) n.start();
   }
 
+  /** Another player's horn, quieter with distance. */
+  remoteHorn(distance: number) {
+    const ctx = this.ctx;
+    if (!ctx || this.muted) return;
+    const vol = 0.2 * this.volume * Math.max(0, 1 - distance / 160);
+    if (vol <= 0.002) return;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(vol, ctx.currentTime);
+    g.gain.setTargetAtTime(0, ctx.currentTime + 0.35, 0.05);
+    g.connect(ctx.destination);
+    for (const f of [370, 466]) {
+      const o = ctx.createOscillator();
+      o.type = 'square';
+      o.frequency.value = f;
+      o.connect(g);
+      o.start();
+      o.stop(ctx.currentTime + 0.6);
+    }
+  }
+
   toggleMute() {
     this.muted = !this.muted;
     return this.muted;

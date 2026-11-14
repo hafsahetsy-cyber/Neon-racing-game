@@ -2,6 +2,9 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three';
 import { EngineAudio } from '../audio/EngineAudio';
 import { Music } from '../audio/Music';
+import { Party, makeCode, normaliseCode } from '../net/Party';
+import { RemotePlayers } from '../net/RemotePlayers';
+import { vehicleById as vehById } from '../vehicles/registry';
 import { PostFX } from '../effects/PostFX';
 import { Rain } from '../effects/Rain';
 import { VehicleFX } from '../effects/VehicleFX';
@@ -22,6 +25,7 @@ import { Input } from './Input';
 import { QUALITY, QUALITY_ORDER, type QualityLevel, loadQuality, saveQuality } from './Quality';
 
 const FIXED_DT = 1 / 60;
+const EMOTES = ['👋', '😂', '🔥', '🏁'];
 const PARKED: DriveInput = { steer: 0, throttle: 0, brake: 0, handbrake: true, boost: false, horn: false };
 
 export class Game {
@@ -43,6 +47,8 @@ export class Game {
   readonly music = new Music();
   readonly save = loadSave();
   menu!: Menu;
+  readonly party = new Party();
+  remotes!: RemotePlayers;
   private switching = 0;
   /** Simulated seconds; exposed for tests. */
   time = 0;
@@ -80,6 +86,7 @@ export class Game {
       selectVehicle: (cfg) => this.setVehicle(cfg),
       setColors: (p, n, a) => {
         this.visual.setColors(p, n, a);
+        queueMicrotask(() => this.party.updateInfo(this.myInfo()));
         this.save.colors[this.vehicle.config.id] = { paint: p, neon: n, accent: a };
         storeSave(this.save);
       },
@@ -97,6 +104,26 @@ export class Game {
         this.save.sfx = this.audio.volume = s;
         storeSave(this.save);
       },
+      party: () => ({
+        code: this.party.code,
+        connected: this.party.connected,
+        hostId: this.party.host?.id ?? '',
+        selfId: this.party.id,
+        players: this.party.players.map((p) => ({ id: p.id, name: p.name, vehicle: vehById(p.vehicle).name, neon: p.neon })),
+      }),
+      playerName: () => this.save.name,
+      setName: (n) => {
+        this.save.name = n.trim() || this.save.name;
+        storeSave(this.save);
+        this.party.updateInfo(this.myInfo());
+      },
+      createParty: () => this.party.join(makeCode('KHI'), this.myInfo()),
+      joinParty: async (raw) => {
+        const code = normaliseCode(raw);
+        if (!code) throw new Error('Codes look like KHI-7Q2');
+        await this.party.join(code, this.myInfo());
+      },
+      leaveParty: () => this.party.leave(),
       raining: () => this.rain.target > 0,
       setRain: (on) => (this.rain.target = on ? 1 : 0),
     });
@@ -113,6 +140,8 @@ export class Game {
         return;
       }
       if (this.mode !== 'drive') return;
+      if (a === 'chat') return this.hud.focusChat();
+      if (a.startsWith('emote')) return this.party.chat(EMOTES[+a.slice(5) - 1], true);
       switch (a) {
         case 'reset': this.vehicle.reset(); break;
         case 'camera': this.hud.toast(`CAMERA · ${this.rig.cycle().toUpperCase()}`); break;
@@ -170,6 +199,32 @@ export class Game {
     this.buildQualityDependent();
     this.resize();
     this.setMode('menu');
+
+    // ---- multiplayer
+    this.remotes = new RemotePlayers(this.physics, this.party.id);
+    this.scene.add(this.remotes.group);
+    this.remotes.onHorn = (d) => this.audio.remoteHorn(d);
+    this.party.onRoster = (list) => {
+      this.remotes.setRoster(list);
+      this.hud.setParty(this.party.code, list.length);
+      this.menu.refresh();
+    };
+    this.party.onSnapshot = (from, s) => this.remotes.push(from, s);
+    this.party.onChat = (line) => {
+      this.hud.addChat(line.name, line.text, line.from === this.party.id);
+      if (line.from !== this.party.id) this.remotes.say(line.from, line.text);
+    };
+    this.hud.onChatSend = (text) => this.party.chat(text);
+    const invite = normaliseCode(new URLSearchParams(location.search).get('party') ?? '');
+    if (invite) {
+      this.menu.pendingCode = invite;
+      this.menu.show('party');
+    }
+  }
+
+  private myInfo() {
+    const c = this.vehicle.config;
+    return { name: this.save.name, vehicle: c.id, paint: c.colors.paint, neon: c.colors.neon, accent: c.colors.accent };
   }
 
   setMode(mode: 'menu' | 'drive') {
@@ -200,6 +255,7 @@ export class Game {
     this.buildFx();
     this.save.vehicle = cfg.id;
     storeSave(this.save);
+    this.party.updateInfo(this.myInfo());
   }
 
   private buildFx() {
@@ -286,6 +342,9 @@ export class Game {
         this.hud.setRoadName(this.world.roadNameAt(this.vehicle.position.x, this.vehicle.position.z));
       }
       this.fx.update(dt, this.camera, this.renderer.domElement.height);
+      this.party.update(dt, this.vehicle, this.mode === 'drive' && this.input.state.horn);
+      this.remotes.update(dt, this.vehicle.position);
+      this.hud.remotes = this.remotes.list();
       this.rain.update(dt, this.camera);
       if (this.rain.amount > 0.005 || this.rain.target > 0) {
         this.world.setWet?.(this.rain.amount);

@@ -27,16 +27,17 @@ export class VehicleVisual {
   private time = 0;
   private boostGlow = 0;
 
-  constructor(readonly config: VehicleConfig) {
+  /** `lights: false` for remote players — real lights are expensive, and their glow materials are enough. */
+  constructor(readonly config: VehicleConfig, lights = true) {
     const neon = new THREE.Color(config.colors.neon);
     this.underglow = new THREE.PointLight(neon, 14, 9, 1.8);
     this.underglow.position.set(0, 0.25, 0.1);
-    this.root.add(this.underglow);
+    if (lights) this.root.add(this.underglow);
 
     this.headlight = new THREE.SpotLight(0xcfe0ff, 160, 80, 0.5, 0.75, 1.7);
     this.headlight.position.set(...config.fx.headlight);
     this.headlight.target.position.set(0, -0.6, -20);
-    this.root.add(this.headlight, this.headlight.target);
+    if (lights) this.root.add(this.headlight, this.headlight.target);
 
     // boost thruster flames (procedural so every vehicle gets them from config)
     const flameGeo = new THREE.ConeGeometry(0.13, 1, 12, 1, true);

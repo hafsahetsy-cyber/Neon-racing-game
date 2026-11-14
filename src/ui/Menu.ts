@@ -1,7 +1,15 @@
 import { QUALITY, QUALITY_ORDER, type QualityLevel } from '../core/Quality';
 import type { VehicleConfig } from '../vehicles/VehicleConfig';
 
-export type Screen = 'title' | 'garage' | 'pause' | 'settings' | 'none';
+export type Screen = 'title' | 'garage' | 'pause' | 'settings' | 'party' | 'none';
+
+export interface PartyView {
+  code: string;
+  connected: boolean;
+  hostId: string;
+  selfId: string;
+  players: { id: string; name: string; vehicle: string; neon: number }[];
+}
 
 export interface MenuHost {
   vehicles: VehicleConfig[];
@@ -15,6 +23,12 @@ export interface MenuHost {
   setQuality(q: QualityLevel): void;
   volumes(): { music: number; sfx: number };
   setVolumes(music: number, sfx: number): void;
+  party(): PartyView;
+  playerName(): string;
+  setName(name: string): void;
+  createParty(): Promise<void>;
+  joinParty(code: string): Promise<void>;
+  leaveParty(): void;
   raining(): boolean;
   setRain(on: boolean): void;
 }
@@ -28,6 +42,10 @@ export class Menu {
   screen: Screen = 'title';
   private root: HTMLElement;
   private back: Screen = 'title';
+  private error = '';
+  private busy = false;
+  /** Pre-filled join code (from a shared ?party= link). */
+  pendingCode = '';
 
   constructor(parent: HTMLElement, private host: MenuHost) {
     this.root = document.createElement('div');
@@ -39,6 +57,8 @@ export class Menu {
     });
     this.root.addEventListener('input', (e) => {
       const t = e.target as HTMLInputElement;
+      if (t.dataset.in === 'name') this.host.setName(t.value.slice(0, 16));
+      if (t.dataset.in === 'code') this.pendingCode = t.value;
       if (t.dataset.vol) {
         const v = this.host.volumes();
         if (t.dataset.vol === 'music') this.host.setVolumes(+t.value, v.sfx);
@@ -47,6 +67,12 @@ export class Menu {
     });
     window.addEventListener('keydown', (e) => {
       if (this.screen === 'none') return;
+      const typing = (e.target as HTMLElement).tagName === 'INPUT';
+      if (typing) {
+        e.stopPropagation();
+        if (e.code === 'Enter' && (e.target as HTMLElement).dataset.in === 'code') this.act('join');
+        return;
+      }
       if (e.code === 'Enter' && (this.screen === 'title' || this.screen === 'garage')) this.act('drive');
       if (this.screen === 'garage' && (e.code === 'ArrowLeft' || e.code === 'KeyA')) this.act('prev');
       if (this.screen === 'garage' && (e.code === 'ArrowRight' || e.code === 'KeyD')) this.act('next');
@@ -60,6 +86,24 @@ export class Menu {
     this.render();
   }
 
+  /** Re-draw after the roster changes, unless the player is mid-typing. */
+  refresh() {
+    if (this.screen === 'party' && document.activeElement?.tagName !== 'INPUT') this.render();
+  }
+
+  private async net(fn: () => Promise<void>) {
+    this.busy = true;
+    this.error = '';
+    this.render();
+    try {
+      await fn();
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'Could not connect';
+    }
+    this.busy = false;
+    this.render();
+  }
+
   private act(act: string, val?: string) {
     const h = this.host;
     const list = h.vehicles;
@@ -69,7 +113,18 @@ export class Menu {
       case 'resume': this.show('none'); h.resume(); break;
       case 'garage': this.back = this.screen; this.show('garage'); break;
       case 'settings': this.back = this.screen; this.show('settings'); break;
-      case 'back': this.show(this.back === 'settings' || this.back === 'garage' ? 'title' : this.back); break;
+      case 'party': this.back = this.screen; this.error = ''; this.show('party'); break;
+      case 'create': void this.net(() => h.createParty()); break;
+      case 'join': void this.net(() => h.joinParty(this.pendingCode)); break;
+      case 'leave': h.leaveParty(); this.render(); break;
+      case 'copy': {
+        const url = `${location.origin}${location.pathname}?party=${h.party().code}`;
+        void navigator.clipboard?.writeText(url);
+        this.error = 'Invite link copied';
+        this.render();
+        break;
+      }
+      case 'back': this.show(this.back === 'pause' ? 'pause' : 'title'); break;
       case 'title': h.toTitle(); this.show('title'); break;
       case 'prev': void h.selectVehicle(list[(i + list.length - 1) % list.length]).then(() => this.render()); break;
       case 'next': void h.selectVehicle(list[(i + 1) % list.length]).then(() => this.render()); break;
@@ -94,6 +149,7 @@ export class Menu {
           <div class="city">NEO KARACHI · SADDAR · 2099</div>
           <div class="btns">
             <button class="btn primary" data-act="drive">DRIVE</button>
+            <button class="btn" data-act="party">PARTY</button>
             <button class="btn" data-act="garage">GARAGE</button>
             <button class="btn" data-act="settings">SETTINGS</button>
           </div>
@@ -106,6 +162,7 @@ export class Menu {
         <div class="panel centre">
           <h2>PAUSED</h2>
           <button class="btn primary" data-act="resume">RESUME</button>
+          <button class="btn" data-act="party">PARTY</button>
           <button class="btn" data-act="garage">GARAGE</button>
           <button class="btn" data-act="settings">SETTINGS</button>
           <button class="btn" data-act="title">MAIN MENU</button>
@@ -125,6 +182,39 @@ export class Menu {
           <div class="row"><button class="chip ${h.raining() ? '' : 'on'}" data-act="rain">CLEAR</button><button class="chip ${h.raining() ? 'on' : ''}" data-act="rain">MONSOON</button></div>
           <button class="btn" data-act="back">BACK</button>
         </div>`;
+      return;
+    }
+    if (this.screen === 'party') {
+      const p = h.party();
+      const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+      if (!p.connected) {
+        this.root.innerHTML = `
+          <div class="panel centre wide">
+            <h2>PARTY</h2>
+            <label>YOUR NAME</label>
+            <input class="field" data-in="name" maxlength="16" value="${esc(h.playerName())}" aria-label="Your name" />
+            <button class="btn primary" data-act="create" ${this.busy ? 'disabled' : ''}>CREATE PARTY</button>
+            <label>OR JOIN WITH A CODE</label>
+            <input class="field code" data-in="code" maxlength="8" placeholder="KHI-7Q2" value="${esc(this.pendingCode)}" aria-label="Party code" />
+            <button class="btn" data-act="join" ${this.busy ? 'disabled' : ''}>JOIN PARTY</button>
+            <div class="err">${this.busy ? 'Connecting…' : esc(this.error)}</div>
+            <button class="btn" data-act="back">BACK</button>
+          </div>`;
+      } else {
+        this.root.innerHTML = `
+          <div class="panel centre wide">
+            <h2>PARTY</h2>
+            <div class="bigcode">${esc(p.code)}</div>
+            <div class="note">Share this code — up to 8 players cruise the same city.</div>
+            <div class="plist">${p.players.map((x) => `<div style="--c:#${x.neon.toString(16).padStart(6, '0')}"><span>${esc(x.name)}${x.id === p.selfId ? ' (you)' : ''}</span><small>${x.id === p.hostId ? 'HOST · ' : ''}${esc(x.vehicle)}</small></div>`).join('')}</div>
+            <div class="err">${esc(this.error)}</div>
+            <div class="row">
+              <button class="btn" data-act="copy">COPY LINK</button>
+              <button class="btn" data-act="leave">LEAVE</button>
+              <button class="btn primary" data-act="drive">DRIVE</button>
+            </div>
+          </div>`;
+      }
       return;
     }
     // garage

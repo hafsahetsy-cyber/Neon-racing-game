@@ -7,6 +7,7 @@ export interface SaveData {
   colors: Record<string, { paint: number; neon: number; accent: number }>;
   music: number;
   sfx: number;
+  name: string;
 }
 
 export function loadSave(): SaveData {
@@ -16,7 +17,8 @@ export function loadSave(): SaveData {
   } catch {
     /* corrupt save: start fresh */
   }
-  const data: SaveData = { vehicle: s.vehicle ?? VEHICLES[0].id, colors: s.colors ?? {}, music: s.music ?? 0.5, sfx: s.sfx ?? 0.7 };
+  const data: SaveData = { vehicle: s.vehicle ?? VEHICLES[0].id, colors: s.colors ?? {}, music: s.music ?? 0.5, sfx: s.sfx ?? 0.7,
+    name: s.name ?? `Driver-${Math.floor(100 + Math.random() * 900)}` };
   // saved paint jobs override the factory colours
   for (const v of VEHICLES) if (data.colors[v.id]) Object.assign(v.colors, data.colors[v.id]);
   return data;

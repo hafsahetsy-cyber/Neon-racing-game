@@ -12,9 +12,7 @@ const hdr = (c: number, k: number) => new THREE.Color(c).multiplyScalar(k);
  * City definitions compose these in their `features` hook.
  */
 
-/** A sheet of open water (sea, river, creek) with drifting glints. `rect` is [minX, minZ, maxX, maxZ]. */
-export function addWater(ctx: FeatureContext, rect: [number, number, number, number], deep: number, glint: number) {
-  const [x0, z0, x1, z1] = rect;
+function waterMaterial(ctx: FeatureContext, deep: number, glint: number) {
   const mat = new THREE.ShaderMaterial({
     polygonOffset: true,
     polygonOffsetFactor: -4,
@@ -47,12 +45,39 @@ export function addWater(ctx: FeatureContext, rect: [number, number, number, num
         gl_FragColor = vec4(mix(col, uFogColor, clamp(fog, 0.0, 1.0)), 1.0);
       }`,
   });
+  ctx.animate((t) => (mat.uniforms.uTime.value = t));
+  return mat;
+}
+
+/** A sheet of open water (sea, river, creek) with drifting glints. `rect` is [minX, minZ, maxX, maxZ]. */
+export function addWater(ctx: FeatureContext, rect: [number, number, number, number], deep: number, glint: number) {
+  const [x0, z0, x1, z1] = rect;
+  const mat = waterMaterial(ctx, deep, glint);
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, z1 - z0), mat);
   mesh.rotation.x = -Math.PI / 2;
   mesh.position.set((x0 + x1) / 2, 0.12, (z0 + z1) / 2);
   mesh.renderOrder = -8;
   ctx.group.add(mesh);
-  ctx.animate((t) => (mat.uniforms.uTime.value = t));
+}
+
+/** Water that follows the map's real shoreline (traced by the converter). */
+export function addMappedWater(ctx: FeatureContext, water: NonNullable<import('./types').CityMap['water']>, deep: number, glint: number) {
+  const pos: number[] = [];
+  const idx: number[] = [];
+  const { cell, ox, oz, runs } = water;
+  for (let i = 0; i < runs.length; i += 3) {
+    const x0 = ox + runs[i] * cell, z0 = oz + runs[i + 1] * cell, x1 = x0 + runs[i + 2] * cell, z1 = z0 + cell;
+    const b = pos.length / 3;
+    pos.push(x0, 0.12, z0, x1, 0.12, z0, x0, 0.12, z1, x1, 0.12, z1);
+    idx.push(b, b + 2, b + 1, b + 1, b + 2, b + 3);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setIndex(idx);
+  const mesh = new THREE.Mesh(geo, waterMaterial(ctx, deep, glint));
+  mesh.frustumCulled = false;
+  mesh.renderOrder = -8;
+  ctx.group.add(mesh);
 }
 
 /** Small lit boats bobbing on a stretch of water. */

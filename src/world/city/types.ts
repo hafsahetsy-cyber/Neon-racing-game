@@ -28,6 +28,8 @@ export interface CityMap {
   buildings: MapBuilding[];
   parks: number[][];
   routes?: import('../../race/Race').Route[];
+  /** Tidal water traced by the converter: rows of wet cells as [gx, gz, length, …]. */
+  water?: { cell: number; ox: number; oz: number; w: number; h: number; runs: number[] };
 }
 
 /** Everything that makes one city different from another. Adding a city = one of these + a map.json. */
@@ -45,7 +47,11 @@ export interface CityDefinition {
   /** Time of day, sky and air — the first thing that tells two cities apart. */
   atmosphere: Atmosphere;
   /** Which family of facades and rooftops the building generator draws. */
-  architecture: 'colonial' | 'mughal';
+  architecture: 'colonial' | 'mughal' | 'gulf';
+  /** Colours for the map's own water (creek, harbour), if it has any. */
+  water?: { deep: number; glint: number; grip: number };
+  /** Push the city limits outward on a side (metres) to make room for terrain beyond the map. */
+  extend?: { north?: number; south?: number; east?: number; west?: number };
   /** Relative share of each ambient traffic type. */
   trafficMix: Partial<Record<TrafficKind, number>>;
   /** Streams of flying traffic overhead (0 for none). */
@@ -94,9 +100,16 @@ export interface Atmosphere {
 
 export interface FeatureContext {
   group: THREE.Group;
-  animate(fn: (time: number) => void): void;
+  /** Per-frame callback; `focus` is the camera position. */
+  animate(fn: (time: number, focus: THREE.Vector3) => void): void;
   half: [number, number];
   roads: MapRoad[];
+  /** True where the map has open water. */
+  isWater(x: number, z: number): boolean;
+  /** World-space triangle-mesh collider (terrain). */
+  addTrimesh(vertices: Float32Array, indices: Uint32Array): void;
+  /** Register a patch of ground with its own grip (1 = tarmac). Return undefined outside the patch. */
+  addGripZone(fn: (x: number, z: number) => number | undefined): void;
   neon: number[];
   fogColor: THREE.Color;
   fogDensity: number;

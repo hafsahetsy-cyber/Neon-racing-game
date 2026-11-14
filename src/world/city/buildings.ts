@@ -70,7 +70,10 @@ void main() {
       vec2 g = vec2(uv.x / 2.6, (uv.y - 4.7) / 3.3);
       vec2 cell = floor(g), f = fract(g);
       float win = step(0.22, f.x) * step(f.x, 0.78) * step(0.2, f.y) * step(f.y, 0.72);
-      if (uArch > 0.5) {
+      if (uArch > 1.5) {
+        // Gulf: narrow, deep-set openings against the heat
+        win = step(0.31, f.x) * step(f.x, 0.69) * step(0.12, f.y) * step(f.y, 0.6);
+      } else if (uArch > 0.5) {
         // Mughal: tall pointed-arch openings
         float t = clamp((f.y - 0.48) / 0.32, 0.0, 1.0);
         win = step(abs(f.x - 0.5), 0.25 * (1.0 - t * t)) * step(0.16, f.y) * step(f.y, 0.8);
@@ -80,7 +83,14 @@ void main() {
       vec3 wc = mix(vec3(1.0, 0.7, 0.36), vec3(0.7, 0.95, 1.0), step(0.9, r));
       col = mix(col, mix(vec3(0.012, 0.014, 0.02), wc * (0.6 + 0.9 * fract(r * 9.0)), lit), win);
       col *= 1.0 - 0.5 * step(f.y, 0.06); // balcony ledge
-      if (uArch > 0.5) {
+      if (uArch > 1.5) {
+        // carved gypsum screen above each opening, a row of timber beam-ends, a stepped parapet
+        float scr = step(0.31, f.x) * step(f.x, 0.69) * step(0.66, f.y) * step(f.y, 0.84);
+        float pat = step(0.5, fract((f.x + f.y) * 20.0)) * step(0.5, fract((f.x - f.y) * 20.0));
+        col = mix(col, vColor * 0.5 * (0.06 * shade + day) + vec3(1.0, 0.78, 0.45) * pat * 0.3 * lit, scr);
+        col *= 1.0 - 0.55 * step(0.9, f.y) * step(f.y, 0.96) * step(0.5, fract(f.x * 5.0));
+        col *= 1.0 - 0.4 * step(H - 0.7, uv.y) * step(0.6, fract(uv.x / 2.2));
+      } else if (uArch > 0.5) {
         // jharoka: a screened balcony box on some bays, lamplight glowing through the lattice
         float jh = step(0.7, hash(cell * 1.7 + seed * 9.0));
         float box = step(0.08, f.x) * step(f.x, 0.92) * step(0.06, f.y) * step(f.y, 0.46) * jh;
@@ -279,7 +289,7 @@ export function buildBuildings(
       uSunDir: { value: new THREE.Vector3(...def.atmosphere.sun.dir).normalize() },
       uTrim: { value: new THREE.Color(def.neon[0]) },
       uDay: { value: def.atmosphere.daylight },
-      uArch: { value: def.architecture === 'mughal' ? 1 : 0 },
+      uArch: { value: def.architecture === 'mughal' ? 1 : def.architecture === 'gulf' ? 2 : 0 },
     },
   });
 
@@ -319,6 +329,7 @@ function tint(g: THREE.BufferGeometry, color: number, k = 1) {
 function buildRoofProps(buildings: MapBuilding[], def: CityDefinition): THREE.Group {
   const g = new THREE.Group();
   const mughal = def.architecture === 'mughal';
+  const gulf = def.architecture === 'gulf';
   const lit = 0.25 + def.atmosphere.daylight * 1.1; // unlit materials: brighten by hand at dusk/day
   const small: THREE.Matrix4[] = [];
   const caps: THREE.Matrix4[] = [];
@@ -343,13 +354,22 @@ function buildRoofProps(buildings: MapBuilding[], def: CityDefinition): THREE.Gr
       const k = THREE.MathUtils.clamp((R * (stepped ? 0.62 + seed * 0.2 : 1)) / 9, 0.7, 2.4);
       caps.push(new THREE.Matrix4().compose(p.set(cx, top, cz), q.identity(), s.setScalar(k)));
     } else if (b.s !== 3 && R > 3.2) {
-      const chance = mughal ? (b.s === 2 ? 0.75 : 0.17) : 0.2;
+      const chance = mughal ? (b.s === 2 ? 0.75 : 0.17) : gulf ? (b.s === 2 ? 0.9 : 0.26) : 0.2;
       if (hash01(cx * 1.31, cz * 0.77) > chance) continue;
-      const k = THREE.MathUtils.clamp(R * 0.26, 0.8, mughal ? 2.4 : 1.4);
+      const k = THREE.MathUtils.clamp(R * 0.26, 0.8, mughal ? 2.4 : gulf ? 1.8 : 1.4);
       small.push(new THREE.Matrix4().compose(p.set(cx, b.h, cz), q.identity(), s.setScalar(k)));
     }
   }
-  const smallGeo = mughal
+  const smallGeo = gulf
+    ? // barjeel: the wind tower that cooled every old Gulf house
+      mergeGeometries([
+        tint(new THREE.BoxGeometry(1.7, 3.6, 1.7), 0xd9c3a0, lit).translate(0, 1.8, 0),
+        colorBox(1.9, 0.18, 1.9, 0, 3.7, 0, 0xbfa780, lit),
+        colorBox(1.72, 1.5, 0.5, 0, 2.6, 0, 0x1a130c),
+        colorBox(0.5, 1.5, 1.72, 0, 2.6, 0, 0x1a130c),
+        colorBox(1.74, 0.08, 1.74, 0, 1.75, 0, def.neon[0], 2.2),
+      ])
+    : mughal
     ? (() => {
         const dome = tint(new THREE.SphereGeometry(1.5, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), 0xd9cdb8, lit);
         dome.scale(1, 1.25, 1);
@@ -360,7 +380,15 @@ function buildRoofProps(buildings: MapBuilding[], def: CityDefinition): THREE.Gr
         tint(new THREE.CylinderGeometry(1.0, 1.0, 1.7, 12), 0x0b0b0e, 1 + lit).translate(0, 1.75, 0),
         colorBox(1.6, 0.9, 1.6, 0, 0.45, 0, 0x16161a),
       ]);
-  const capGeo = mughal
+  const capGeo = gulf
+    ? // glass needles: a tapering crown and a long lit spire
+      mergeGeometries([
+        tint(new THREE.CylinderGeometry(1.2, 5.5, 14, 4, 1), 0x6a7890, lit).translate(0, 7, 0),
+        tint(new THREE.CylinderGeometry(0.12, 1.1, 34, 6, 1), def.neon[1 % def.neon.length], 2.4).translate(0, 31, 0),
+        colorBox(7.8, 0.3, 7.8, 0, 0.2, 0, def.neon[0], 2.6),
+        colorBox(0.8, 0.8, 0.8, 0, 48.4, 0, 0xff1030, 6),
+      ])
+    : mughal
     ? (() => {
         const onion = tint(new THREE.SphereGeometry(5, 18, 12), 0xe6dccb, lit);
         onion.scale(1, 1.25, 1);

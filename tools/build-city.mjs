@@ -47,6 +47,27 @@ const CITIES = {
         via: [[31.5915, 74.312], [31.5895, 74.319], [31.586, 74.3265], [31.5823, 74.3255], [31.5775, 74.32], [31.5765, 74.314], [31.5785, 74.3085], [31.585, 74.308], [31.5915, 74.312]] },
     ],
   },
+  dubai: {
+    src: 'tools/data/dubai_osm.json',
+    out: 'public/cities/dubai/map.json',
+    bbox: [25.25, 55.29, 25.276, 55.326],
+    // a point in the middle of Dubai Creek: the creek is traced by flood fill from here
+    waterSeed: [25.2665, 55.3],
+    // the world is flat, so tunnels under the creek are drawn as surface crossings
+    keepTunnels: true,
+    landmarks: [
+      { id: 'fort', name: 'Al Fahidi Fort', lat: 25.2636, lon: 55.2972, clear: 45 },
+      { id: 'clocktower', name: 'Deira Clocktower', lat: 25.2587, lon: 55.3247, clear: 34 },
+    ],
+    routes: [
+      { name: 'SOUK SPRINT', blurb: 'Through Deira from the Gold Souk to the Clocktower.',
+        via: [[25.2705, 55.2985], [25.266, 55.308], [25.2625, 55.3165], [25.2587, 55.3235]] },
+      { name: 'CREEKSIDE RUN', blurb: 'A long run through the old city beside the Creek.',
+        via: [[25.2615, 55.2965], [25.2545, 55.3085], [25.2535, 55.319], [25.2587, 55.3235], [25.266, 55.308]] },
+      { name: 'DEIRA LOOP', blurb: 'Gold Souk, Clocktower and back through the souks.',
+        via: [[25.2705, 55.2985], [25.266, 55.308], [25.2587, 55.3235], [25.2625, 55.3165], [25.2705, 55.2985]] },
+    ],
+  },
 };
 
 const city = CITIES[process.argv[2] ?? 'karachi'];
@@ -118,7 +139,7 @@ const graphRuns = []; // unsimplified geometry, so junction vertices survive for
 for (const e of osm.elements) {
   const t = e.tags ?? {};
   if (!t.highway || !(t.highway in CLASSES) || !e.geometry) continue;
-  if (t.area === 'yes' || t.tunnel === 'yes') continue;
+  if (t.area === 'yes' || (t.tunnel === 'yes' && !city.keepTunnels)) continue;
   const c = CLASSES[t.highway];
   const pts = e.geometry.map((g) => proj(g.lat, g.lon));
   // split into runs that are inside the playable area
@@ -249,6 +270,81 @@ for (const e of osm.elements) {
   if (poly.length >= 3 && poly.some((p) => inside(p))) parks.push(poly.flat().map(r1));
 }
 
+// ------------------------------------------------------------------ water
+// Tidal water (a creek, a harbour) is mapped as open coastline rather than as polygons, so find it
+// by flood fill: rasterise the coastline as a wall, then spread out from a point known to be wet.
+let water = null;
+if (city.waterSeed) {
+  const C = 6;
+  const GW = Math.ceil((HX * 2 + 240) / C), GH = Math.ceil((HZ * 2 + 240) / C);
+  const wall = new Uint8Array(GW * GH);
+  const gi = (x, z) => {
+    const gx = Math.floor((x + HX + 120) / C), gz = Math.floor((z + HZ + 120) / C);
+    return gx < 0 || gz < 0 || gx >= GW || gz >= GH ? -1 : gz * GW + gx;
+  };
+  for (const e of osm.elements) {
+    if (e.tags?.natural !== 'coastline' || !e.geometry) continue;
+    const pts = e.geometry.map((g) => proj(g.lat, g.lon));
+    for (let i = 1; i < pts.length; i++) {
+      const [ax, az] = pts[i - 1], [bx, bz] = pts[i];
+      const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / (C * 0.4)));
+      for (let k = 0; k <= n; k++) {
+        const x = ax + ((bx - ax) * k) / n, z = az + ((bz - az) * k) / n;
+        // a plus-shaped stamp so the wall has no diagonal leaks
+        for (const [dx, dz] of [[0, 0], [C, 0], [-C, 0], [0, C], [0, -C]]) {
+          const i2 = gi(x + dx, z + dz);
+          if (i2 >= 0) wall[i2] = 1;
+        }
+      }
+    }
+  }
+  const wet = new Uint8Array(GW * GH);
+  const [sx, sz] = proj(...city.waterSeed);
+  const start = gi(sx, sz);
+  const stack = start >= 0 && !wall[start] ? [start] : [];
+  let count = 0;
+  while (stack.length) {
+    const i = stack.pop();
+    if (wet[i] || wall[i]) continue;
+    wet[i] = 1;
+    count++;
+    const gx = i % GW, gz = (i - gx) / GW;
+    if (gx > 0) stack.push(i - 1);
+    if (gx < GW - 1) stack.push(i + 1);
+    if (gz > 0) stack.push(i - GW);
+    if (gz < GH - 1) stack.push(i + GW);
+  }
+  const frac = count / (GW * GH);
+  if (frac < 0.01 || frac > 0.6) {
+    console.warn(`water flood looks wrong (${(frac * 100).toFixed(0)}% of the map) — skipped`);
+  } else {
+    // shore cells count as water too, so the sheet meets the land
+    for (let i = 0; i < wall.length; i++) if (wall[i]) {
+      const gx = i % GW;
+      if ((gx > 0 && wet[i - 1] === 1) || (gx < GW - 1 && wet[i + 1] === 1) || (i >= GW && wet[i - GW] === 1) || (i + GW < wet.length && wet[i + GW] === 1)) wet[i] = 2;
+    }
+    const runs = [];
+    for (let gz = 0; gz < GH; gz++) {
+      let s = -1;
+      for (let gx = 0; gx <= GW; gx++) {
+        const on = gx < GW && wet[gz * GW + gx] > 0;
+        if (on && s < 0) s = gx;
+        if (!on && s >= 0) { runs.push(s, gz, gx - s); s = -1; }
+      }
+    }
+    water = { cell: C, ox: -(HX + 120), oz: -(HZ + 120), w: GW, h: GH, runs };
+    // drop any building standing in the water
+    const isWet = (x, z) => { const i = gi(x, z); return i >= 0 && wet[i] === 1; };
+    for (let i = buildings.length - 1; i >= 0; i--) {
+      const p = buildings[i].p;
+      let cx = 0, cz = 0;
+      for (let k = 0; k < p.length; k += 2) { cx += p[k]; cz += p[k + 1]; }
+      if (isWet(cx / (p.length / 2), cz / (p.length / 2))) buildings.splice(i, 1);
+    }
+    console.log(`water: ${(frac * 100).toFixed(1)}% of the map, ${runs.length / 3} runs`);
+  }
+}
+
 // ------------------------------------------------------------------ infill
 // Where the map has streets but few building footprints (common outside big-city centres),
 // line the empty frontages with generated buildings so streets still feel enclosed.
@@ -374,6 +470,24 @@ function buildRoutes(defs) {
   }
   const mainKeys = new Set();
   for (const g of graphRuns) if (g.c <= 3) for (const p of g.pts) mainKeys.add(nk(p));
+  // only route through the largest connected piece of the network
+  const comp = new Map();
+  let biggest = -1, biggestSize = 0, cid = 0;
+  for (const k0 of nodes.keys()) {
+    if (comp.has(k0)) continue;
+    let size = 0;
+    const st = [k0];
+    comp.set(k0, cid);
+    while (st.length) {
+      const k = st.pop();
+      size++;
+      for (const [nb] of nodes.get(k).edges) if (!comp.has(nb)) { comp.set(nb, cid); st.push(nb); }
+    }
+    if (size > biggestSize) { biggestSize = size; biggest = cid; }
+    cid++;
+  }
+  for (const k of [...mainKeys]) if (comp.get(k) !== biggest) mainKeys.delete(k);
+  console.log(`road graph: ${nodes.size} nodes in ${cid} pieces; largest has ${biggestSize}`);
   const nearest = (x, z) => {
     let best = null, bd = Infinity;
     for (const k of mainKeys) {
@@ -410,7 +524,7 @@ function buildRoutes(defs) {
     let ok = true;
     for (let i = 1; i < keys.length; i++) {
       const seg = path(keys[i - 1], keys[i]);
-      if (!seg) { ok = false; break; }
+      if (!seg) { ok = false; console.warn('  no path for leg', i, def.via[i - 1], '->', def.via[i]); break; }
       line = line.concat(i === 1 ? seg : seg.slice(1));
     }
     if (!ok || line.length < 2) { console.warn('route failed:', def.name); continue; }
@@ -448,6 +562,7 @@ const out = {
   buildings,
   parks,
   routes,
+  ...(water ? { water } : {}),
 };
 fs.mkdirSync(city.out.replace(/\/[^/]+$/, ''), { recursive: true });
 fs.writeFileSync(city.out, JSON.stringify(out));

@@ -540,6 +540,9 @@ export class Game {
       this.acc += dt;
       let steps = 0;
       while (this.acc >= FIXED_DT && steps < 5) {
+        // loose surfaces (sand, shallow water) ease in rather than snapping
+        const grip = this.world.gripAt?.(this.vehicle.position.x, this.vehicle.position.z) ?? 1;
+        this.vehicle.gripScale += (grip - this.vehicle.gripScale) * 0.12;
         this.vehicle.step(FIXED_DT, this.mode === 'drive' && !this.race.holding ? this.input.state : PARKED);
         this.physics.step(this.events);
         this.vehicle.postStep();
@@ -578,9 +581,10 @@ export class Game {
     this.hud.update(dt, this.vehicle);
     this.audio.update(this.vehicle, this.mode === 'drive' && this.input.state.horn, this.paused, this.rain.amount);
     this.music.intensity = this.mode === 'drive' ? Math.min(1, 0.25 + this.vehicle.speed / this.vehicle.config.engine.topSpeed) : 0.15;
-    this.post.render(this.paused ? 0 : dt, {
-      speed: this.vehicle.speed / this.vehicle.config.engine.topSpeed,
-      boosting: this.vehicle.boosting,
+    // photo mode gets a clean frame: no speed blur frozen into the picture
+    this.post.render(this.photo.on ? 1 : this.paused ? 0 : dt, {
+      speed: this.photo.on ? 0 : this.vehicle.speed / this.vehicle.config.engine.topSpeed,
+      boosting: !this.photo.on && this.vehicle.boosting,
       impact: this.vehicle.impact,
     });
     this.autoQuality(dt);

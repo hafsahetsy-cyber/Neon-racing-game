@@ -4,6 +4,7 @@ import type { QualitySettings } from '../core/Quality';
 import { makeGroundTextures } from '../effects/textures';
 import { RoadGrid } from './city/RoadGrid';
 import { buildBuildings } from './city/buildings';
+import { addMappedWater } from './city/features';
 import { Occupancy, buildProps } from './city/props';
 import { buildRoads, drawMiniMap } from './city/roads';
 import { buildStreetLife } from './city/streetlife';
@@ -21,7 +22,9 @@ export async function buildCity(world: RAPIER.World, quality: QualitySettings, d
   const fogColor = new THREE.Color(def.fog.color);
   const fogDensity = def.fog.density;
   const grid = new RoadGrid(map.roads);
-  const animators: ((t: number) => void)[] = [];
+  const animators: ((t: number, focus: THREE.Vector3) => void)[] = [];
+  const gripZones: ((x: number, z: number) => number | undefined)[] = [];
+  const ext = { north: 0, south: 0, east: 0, west: 0, ...def.extend };
   const [HX, HZ] = map.half;
 
   // ---------------------------------------------------------------- ground
@@ -40,8 +43,21 @@ export async function buildCity(world: RAPIER.World, quality: QualitySettings, d
   group.add(ground);
   world.createCollider(RAPIER.ColliderDesc.cuboid(G / 2, 1, G / 2).setTranslation(0, -1, 0).setFriction(0.9));
   // invisible city limits
-  for (const [x, z, sx, sz] of [[0, -HZ - 60, HX + 80, 2], [0, HZ + 60, HX + 80, 2], [-HX - 60, 0, 2, HZ + 80], [HX + 60, 0, 2, HZ + 80]])
+  const span = Math.max(HX, HZ) + 900;
+  for (const [x, z, sx, sz] of [
+    [0, -HZ - 60 - ext.north, span, 2], [0, HZ + 60 + ext.south, span, 2], [-HX - 60 - ext.west, 0, 2, span], [HX + 60 + ext.east, 0, 2, span],
+  ])
     world.createCollider(RAPIER.ColliderDesc.cuboid(sx, 30, sz).setTranslation(x, 30, z));
+
+  // mapped water (a creek, a harbour): lookup grid for boats and grip
+  const wm = map.water;
+  const wet = wm ? new Uint8Array(wm.w * wm.h) : null;
+  if (wm && wet) for (let i = 0; i < wm.runs.length; i += 3) wet.fill(1, wm.runs[i + 1] * wm.w + wm.runs[i], wm.runs[i + 1] * wm.w + wm.runs[i] + wm.runs[i + 2]);
+  const isWater = (x: number, z: number) => {
+    if (!wm || !wet) return false;
+    const gx = Math.floor((x - wm.ox) / wm.cell), gz = Math.floor((z - wm.oz) / wm.cell);
+    return gx >= 0 && gz >= 0 && gx < wm.w && gz < wm.h && wet[gz * wm.w + gx] === 1;
+  };
 
   // ---------------------------------------------------------------- landmarks (may add footprints, so before buildings)
   for (const lm of map.landmarks) {
@@ -91,7 +107,7 @@ export async function buildCity(world: RAPIER.World, quality: QualitySettings, d
     });
   }
 
-  def.features?.({
+  const fctx: import('./city/types').FeatureContext = {
     group,
     animate: (fn) => animators.push(fn),
     half: map.half,
@@ -99,12 +115,24 @@ export async function buildCity(world: RAPIER.World, quality: QualitySettings, d
     neon: def.neon,
     fogColor,
     fogDensity,
+    isWater,
+    addTrimesh(vertices, indices) {
+      world.createCollider(RAPIER.ColliderDesc.trimesh(vertices, indices).setFriction(0.9));
+    },
+    addGripZone: (fn) => gripZones.push(fn),
     addBox(center, size, quat) {
       const d = RAPIER.ColliderDesc.cuboid(size.x / 2, size.y / 2, size.z / 2).setTranslation(center.x, center.y, center.z).setFriction(0.9);
       if (quat) d.setRotation({ x: quat.x, y: quat.y, z: quat.z, w: quat.w });
       world.createCollider(d);
     },
-  });
+  };
+  if (wm && def.water) {
+    addMappedWater(fctx, wm, def.water.deep, def.water.glint);
+    const g = def.water.grip;
+    // roads over the water (bridges) keep their normal grip
+    gripZones.push((x, z) => (isWater(x, z) && !grid.nearest(x, z, 0.5) ? g : undefined));
+  }
+  def.features?.(fctx);
 
   // ---------------------------------------------------------------- streets, buildings, street life
   const roadGroup = buildRoads(map.roads, grid);
@@ -192,6 +220,13 @@ export async function buildCity(world: RAPIER.World, quality: QualitySettings, d
     attribution: map.attribution,
     routes: map.routes ?? [],
     roadNameAt: (x, z) => grid.nearest(x, z, 3)?.road.n ?? '',
+    gripAt(x, z) {
+      for (const zone of gripZones) {
+        const g = zone(x, z);
+        if (g !== undefined) return g;
+      }
+      return 1;
+    },
     setWet(k) {
       roadMats.forEach((m, i) => {
         m.roughness = THREE.MathUtils.lerp(dry[i].r, 0.16, k);
@@ -210,7 +245,7 @@ export async function buildCity(world: RAPIER.World, quality: QualitySettings, d
       props.update(time);
       traffic.update(dt, player ?? focus);
       life.update(dt, time, player ?? focus);
-      for (const a of animators) a(time);
+      for (const a of animators) a(time, focus);
     },
   };
 }

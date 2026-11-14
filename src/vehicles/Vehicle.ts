@@ -58,6 +58,8 @@ export class Vehicle {
   rpm = 0.1; // 0..1
   gear = 1;
   boost = 1; // meter 0..1
+  /** Grip of the surface under the car (1 = tarmac). Set by the game from the world. */
+  gripScale = 1;
   boosting = false;
   /** Incremented each time boost kicks in — fx listen for changes. */
   boostEvents = 0;
@@ -315,12 +317,12 @@ export class Vehicle {
           const jr = 1.1 * mShare * dt; // rolling resistance + engine braking
           jLong += clamp(-vLong * mShare, -jr, jr);
         }
-        const maxLong = c.grip.longitudinal * gripLoad * dt;
+        const maxLong = c.grip.longitudinal * this.gripScale * gripLoad * dt;
         jLong = clamp(jLong, -maxLong, maxLong);
       }
 
       // --- lateral
-      let mu = c.grip.lateral;
+      let mu = c.grip.lateral * this.gripScale;
       const slipAngle = Math.atan2(Math.abs(vLat), Math.abs(vLong) + 1.5);
       if (isRear) {
         if (locked) mu *= c.grip.handbrake;

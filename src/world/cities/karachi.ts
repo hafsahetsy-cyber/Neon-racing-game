@@ -170,6 +170,8 @@ export const karachi: CityDefinition = {
   },
   neon: [0x00e5d0, 0xff2bd6, 0x7a5cff, 0x39a0ff],
   architecture: 'colonial',
+  // punchy and electric: the most saturated city
+  grade: { saturation: 0.16, contrast: 0.08, bloom: 1.15 },
   trafficMix: { bus: 0.2, rickshaw: 0.36, car: 0.3, bike: 0.14 },
   skyLanes: 3,
   skylineGap: [Math.PI / 2 - 0.95, Math.PI / 2 + 0.95],

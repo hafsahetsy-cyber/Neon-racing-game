@@ -68,6 +68,30 @@ const CITIES = {
         via: [[25.2705, 55.2985], [25.266, 55.308], [25.2587, 55.3235], [25.2625, 55.3165], [25.2705, 55.2985]] },
     ],
   },
+  london: {
+    src: 'tools/data/london_osm.json',
+    out: 'public/cities/london/map.json',
+    bbox: [51.496, -0.13, 51.516, -0.084],
+    // mid-Thames by Waterloo Bridge. The river is a relation in OSM: fetch its bank ways with
+    //   relation["natural"="water"]["water"="river"](BBOX);way(r)(BBOX);out geom;
+    // and add them to the extract tagged natural=coastline so they act as the shoreline.
+    waterSeed: [51.5097, -0.1099],
+    shoreGap: 180,
+    keepTunnels: true,
+    landmarks: [
+      { id: 'clock', name: 'Clock Tower', lat: 51.5007, lon: -0.1246, clear: 28 },
+      { id: 'wheel', name: 'Great Wheel', lat: 51.5033, lon: -0.1193, clear: 34 },
+      { id: 'dome', name: 'Cathedral', lat: 51.5138, lon: -0.0984, clear: 80 },
+    ],
+    routes: [
+      { name: 'EMBANKMENT DASH', blurb: 'Along the north bank from the Clock Tower to the City.',
+        via: [[51.501, -0.1235], [51.5075, -0.1215], [51.5105, -0.11], [51.511, -0.096]] },
+      { name: 'BRIDGES LOOP', blurb: 'Over one bridge, along the South Bank, back over another.',
+        via: [[51.501, -0.1235], [51.5008, -0.119], [51.5035, -0.112], [51.508, -0.1045], [51.5115, -0.1042], [51.5105, -0.11], [51.5075, -0.1215], [51.501, -0.1235]] },
+      { name: 'CITY CIRCUIT', blurb: 'Cathedral, Fleet Street, the Strand, Whitehall and the river.',
+        via: [[51.5138, -0.101], [51.514, -0.108], [51.511, -0.119], [51.508, -0.127], [51.503, -0.1263], [51.5075, -0.1215], [51.511, -0.096], [51.5138, -0.101]] },
+    ],
+  },
 };
 
 const city = CITIES[process.argv[2] ?? 'karachi'];
@@ -291,6 +315,34 @@ if (city.waterSeed) {
       for (let k = 0; k <= n; k++) {
         const x = ax + ((bx - ax) * k) / n, z = az + ((bz - az) * k) / n;
         // a plus-shaped stamp so the wall has no diagonal leaks
+        for (const [dx, dz] of [[0, 0], [C, 0], [-C, 0], [0, C], [0, -C]]) {
+          const i2 = gi(x + dx, z + dz);
+          if (i2 >= 0) wall[i2] = 1;
+        }
+      }
+    }
+  }
+  if (city.shoreGap) {
+    // shoreline pieces sometimes stop a little short of each other (a lock, a missing way): bridge the gaps
+    const ends = [];
+    for (const e of osm.elements) {
+      if (e.tags?.natural !== 'coastline' || !e.geometry || e.geometry.length < 2) continue;
+      const g0 = e.geometry[0], g1 = e.geometry[e.geometry.length - 1];
+      ends.push(proj(g0.lat, g0.lon), proj(g1.lat, g1.lon));
+    }
+    for (let i = 0; i < ends.length; i++) {
+      if (!inside(ends[i], 100)) continue;
+      let best = -1, bd = Infinity, touching = false;
+      for (let j = 0; j < ends.length; j++) {
+        if (j === i || j === (i ^ 1)) continue;
+        const d = Math.hypot(ends[i][0] - ends[j][0], ends[i][1] - ends[j][1]);
+        if (d < 3) { touching = true; break; }
+        if (d < bd) { bd = d; best = j; }
+      }
+      if (touching || best < 0 || bd > city.shoreGap) continue;
+      const n = Math.ceil(bd / (C * 0.4));
+      for (let k = 0; k <= n; k++) {
+        const x = ends[i][0] + ((ends[best][0] - ends[i][0]) * k) / n, z = ends[i][1] + ((ends[best][1] - ends[i][1]) * k) / n;
         for (const [dx, dz] of [[0, 0], [C, 0], [-C, 0], [0, C], [0, -C]]) {
           const i2 = gi(x + dx, z + dz);
           if (i2 >= 0) wall[i2] = 1;

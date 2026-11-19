@@ -63,6 +63,34 @@ function makeKinds(def: CityDefinition): Kind[] {
     colorBox(0.2, 0.16, 0.08, 0, 1.0, -0.97, HEAD, 6),
     colorBox(0.2, 0.1, 0.08, 0, 0.85, 0.97, TAIL, 5),
   ]);
+  // black cab: upright, rounded, an amber light on the roof
+  const BK = 0x17171b;
+  const cab = mergeGeometries([
+    colorBox(1.8, 0.8, 4.4, 0, 0.82, 0, BK),
+    colorBox(1.7, 0.72, 2.7, 0, 1.56, 0.25, BK),
+    colorBox(1.72, 0.46, 2.4, 0, 1.6, 0.25, 0x0a1118),
+    colorBox(0.5, 0.14, 0.22, 0, 1.99, -0.7, 0xffb020, 4),
+    colorBox(1.84, 0.05, 4.44, 0, 0.44, 0, N[2 % N.length], 2),
+    colorBox(0.3, 0.2, 0.08, -0.62, 0.9, -2.22, HEAD, 6),
+    colorBox(0.3, 0.2, 0.08, 0.62, 0.9, -2.22, HEAD, 6),
+    colorBox(0.24, 0.16, 0.08, -0.66, 0.92, 2.22, TAIL, 5),
+    colorBox(0.24, 0.16, 0.08, 0.66, 0.92, 2.22, TAIL, 5),
+  ]);
+  // double-decker: two storeys of lit windows in a red slab
+  const RD = 0xa3121c;
+  const decker = mergeGeometries([
+    colorBox(2.5, 3.9, 9.6, 0, 2.3, 0, RD),
+    colorBox(2.54, 0.8, 9.0, 0, 1.75, 0, 0x0b1118),
+    colorBox(2.54, 0.8, 9.0, 0, 3.45, 0, 0x0b1118),
+    colorBox(2.56, 0.1, 8.6, 0, 2.06, 0, 0xffe2a8, 2.2),
+    colorBox(2.56, 0.1, 8.6, 0, 3.76, 0, 0xffe2a8, 2.2),
+    colorBox(1.6, 0.34, 0.08, 0, 2.62, -4.82, 0xffb020, 3.5),
+    colorBox(2.56, 0.06, 9.66, 0, 0.42, 0, N[1 % N.length], 2),
+    colorBox(0.36, 0.24, 0.08, -0.9, 0.95, -4.82, HEAD, 6),
+    colorBox(0.36, 0.24, 0.08, 0.9, 0.95, -4.82, HEAD, 6),
+    colorBox(0.3, 0.3, 0.08, -0.95, 1.0, 4.82, TAIL, 5),
+    colorBox(0.3, 0.3, 0.08, 0.95, 1.0, 4.82, TAIL, 5),
+  ]);
   // horse tonga: two big wheels, a canopy, and a horse out front wearing a glowing harness
   const H = 0x2a1a10;
   const tonga = mergeGeometries([
@@ -91,6 +119,8 @@ function makeKinds(def: CityDefinition): Kind[] {
     { size: [1.8, 1.5, 4.3], geo: car, speed: [9, 15], share: share('car') },
     { size: [0.5, 1.7, 1.9], geo: bike, speed: [9, 16], share: share('bike') },
     { size: [1.7, 2.6, 5], geo: tonga, speed: [3.5, 6], share: share('tonga') },
+    { size: [1.8, 1.9, 4.4], geo: cab, speed: [8, 14], share: share('cab') },
+    { size: [2.5, 4.3, 9.6], geo: decker, speed: [6, 10], share: share('decker') },
   ];
 }
 

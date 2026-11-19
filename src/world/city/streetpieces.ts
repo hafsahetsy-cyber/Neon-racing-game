@@ -317,3 +317,13 @@ export function addShortcutLanes(ctx: FeatureContext, max: number, label: string
   }
   return count;
 }
+
+/**
+ * Scatter any piece of street furniture along the kerbs (phone boxes, pillar boxes, benches…).
+ * `spacing` returns the metres between pieces for a road class, or 0 to skip that class.
+ */
+export function addKerbProps(ctx: FeatureContext, geo: THREE.BufferGeometry, spacing: (cls: number) => number, max: number, gap: number, seed: number) {
+  const spots = kerbSpots(ctx, (_n, c) => spacing(c), max, gap, seed);
+  placeInstances(ctx, geo, spots);
+  return spots.length;
+}

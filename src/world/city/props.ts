@@ -236,7 +236,7 @@ export function buildProps(
       sidx.push(i, i + 1, i + 2, i + 1, i + 3, i + 2);
     }
   };
-  const maxSigns = Math.floor(2600 * Math.min(1.2, q.particles + 0.3));
+  const maxSigns = Math.floor(2600 * Math.min(1.2, q.particles + 0.3) * (def.signDensity ?? 1));
   let signCount = 0;
   map.roads.forEach((r) => {
     if (r.c < 1 || r.c > 4) return;

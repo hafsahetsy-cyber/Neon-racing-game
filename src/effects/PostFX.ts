@@ -1,6 +1,6 @@
 import {
-  BlendFunction, BloomEffect, Effect, EffectAttribute, EffectComposer, EffectPass, NoiseEffect, RenderPass,
-  ToneMappingEffect, ToneMappingMode, VignetteEffect,
+  BlendFunction, BloomEffect, BrightnessContrastEffect, Effect, EffectAttribute, EffectComposer, EffectPass, HueSaturationEffect,
+  NoiseEffect, RenderPass, ToneMappingEffect, ToneMappingMode, VignetteEffect,
 } from 'postprocessing';
 import * as THREE from 'three';
 import type { QualitySettings } from '../core/Quality';
@@ -80,6 +80,8 @@ export class PostFX {
     scene: THREE.Scene,
     camera: THREE.Camera,
     q: QualitySettings,
+    /** Per-city look: saturation and contrast in -1..1, and a multiplier on bloom. */
+    private grade: { saturation: number; contrast: number; brightness?: number; bloom: number } = { saturation: 0, contrast: 0, bloom: 1 },
   ) {
     this.composer = new EffectComposer(renderer, {
       frameBufferType: THREE.HalfFloatType,
@@ -112,6 +114,8 @@ export class PostFX {
       final.push(noise);
     }
     final.push(new ToneMappingEffect({ mode: ToneMappingMode.ACES_FILMIC }));
+    if (grade.saturation !== 0) final.push(new HueSaturationEffect({ saturation: grade.saturation }));
+    if (grade.contrast !== 0 || grade.brightness) final.push(new BrightnessContrastEffect({ contrast: grade.contrast, brightness: grade.brightness ?? 0 }));
     this.composer.addPass(new EffectPass(camera, ...final));
   }
 
@@ -136,7 +140,7 @@ export class PostFX {
       u.get('uShimmer')!.value = s.shimmer ?? 0;
       u.get('uTime')!.value += dt;
     }
-    if (this.bloom) this.bloom.intensity = 1.15 + 0.5 * k + this.pulse * 1.2;
+    if (this.bloom) this.bloom.intensity = (1.15 + 0.5 * k) * this.grade.bloom + this.pulse * 1.2;
     this.vignette.darkness = 0.55 + 0.25 * k;
     this.composer.render(dt);
   }

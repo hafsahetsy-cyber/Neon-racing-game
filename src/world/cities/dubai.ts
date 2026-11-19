@@ -155,6 +155,8 @@ export const dubai: CityDefinition = {
   },
   neon: [GOLD, WHITE, 0xff8a3c, 0x6fe0ff],
   architecture: 'gulf',
+  // sun-bleached: pale, low contrast, little glow
+  grade: { saturation: -0.14, contrast: -0.06, brightness: 0.03, bloom: 0.8 },
   streetLight: 0xffd9a0,
   facades: [0xe6d3b0, 0xf0e6d2, 0xd9b98a, 0xcfa77a, 0xe8cdb4, 0xbfa27a, 0xf4efe4, 0xd6c2a2],
   heritageStone: 0xd8b98a,

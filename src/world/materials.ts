@@ -114,14 +114,14 @@ export function makeSky(horizon: THREE.Color, zenith: THREE.Color) {
 
 /** Small emissive scene baked to an env map so chrome and wet tarmac pick up neon reflections. */
 /** `neon` = the city's colours, so chrome and wet tarmac reflect the right city. */
-export function makeNeonEnvironment(renderer: THREE.WebGLRenderer, neon: number[] = [0x00f0ff, 0xff2bd6, 0x7a5cff], sky = 0x05030c): THREE.Texture {
+export function makeNeonEnvironment(renderer: THREE.WebGLRenderer, neon: number[] = [0x00f0ff, 0xff2bd6, 0x7a5cff], sky = 0x05030c, glow = 1): THREE.Texture {
   const [A, B, C] = [neon[0], neon[1 % neon.length], neon[2 % neon.length]];
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(sky);
   const add = (color: number, intensity: number, pos: [number, number, number], size: [number, number, number]) => {
     const m = new THREE.Mesh(
       new THREE.BoxGeometry(...size),
-      new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(intensity) }),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(intensity * glow) }),
     );
     m.position.set(...pos);
     scene.add(m);
@@ -141,6 +141,7 @@ export function makeNeonEnvironment(renderer: THREE.WebGLRenderer, neon: number[
 /** Sky dome with a three-band gradient, a sun or moon with its glow, and optional stars. */
 export function makeAtmosphereSky(o: {
   horizon: THREE.Color; mid: THREE.Color; zenith: THREE.Color; sunDir: THREE.Vector3; sunColor: THREE.Color; sunSize: number; stars: number;
+  clouds?: { cover: number; color: THREE.Color };
 }) {
   const mat = new THREE.ShaderMaterial({
     side: THREE.BackSide,
@@ -149,6 +150,7 @@ export function makeAtmosphereSky(o: {
     uniforms: {
       uHorizon: { value: o.horizon }, uMid: { value: o.mid }, uZenith: { value: o.zenith }, uSunDir: { value: o.sunDir },
       uSunColor: { value: o.sunColor }, uSunSize: { value: o.sunSize }, uStars: { value: o.stars }, uTime: { value: 0 },
+      uCloud: { value: o.clouds?.cover ?? 0 }, uCloudColor: { value: o.clouds?.color ?? new THREE.Color(0) },
     },
     vertexShader: /* glsl */ `
       varying vec3 vDir;
@@ -161,6 +163,18 @@ export function makeAtmosphereSky(o: {
     fragmentShader: /* glsl */ `
       uniform vec3 uHorizon; uniform vec3 uMid; uniform vec3 uZenith; uniform vec3 uSunDir; uniform vec3 uSunColor;
       uniform float uSunSize; uniform float uStars; uniform float uTime;
+      uniform float uCloud; uniform vec3 uCloudColor;
+      float h2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float vnoise(vec2 p) {
+        vec2 i = floor(p), f = fract(p);
+        f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(h2(i), h2(i + vec2(1.0, 0.0)), f.x), mix(h2(i + vec2(0.0, 1.0)), h2(i + vec2(1.0, 1.0)), f.x), f.y);
+      }
+      float fbm(vec2 p) {
+        float a = 0.5, s = 0.0;
+        for (int i = 0; i < 5; i++) { s += a * vnoise(p); p = p * 2.03 + 17.0; a *= 0.5; }
+        return s;
+      }
       varying vec3 vDir;
       float hash(vec3 p) { return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
       void main() {
@@ -172,6 +186,14 @@ export function makeAtmosphereSky(o: {
         float sd = max(dot(d, uSunDir), 0.0);
         // disc, tight corona, and a wide wash that lights the haze around it
         col += uSunColor * (smoothstep(1.0 - 0.0006 * uSunSize, 1.0 - 0.0003 * uSunSize, sd) * 5.0 + pow(sd, 90.0 / uSunSize) * 0.9 + pow(sd, 5.0) * 0.22 * uSunSize);
+        if (uCloud > 0.0) {
+          // a slow-moving overcast deck, thicker and darker in its folds
+          vec2 cp = d.xz / max(d.y, 0.05) * 0.9 + vec2(uTime * 0.012, uTime * 0.004);
+          float n = fbm(cp);
+          float cover = smoothstep(1.0 - uCloud * 1.2, 1.0 - uCloud * 0.45, n + 0.25);
+          vec3 cc = uCloudColor * (0.7 + 0.5 * fbm(cp * 2.6 + 4.0));
+          col = mix(col, cc, cover * smoothstep(0.0, 0.1, d.y) * 0.94);
+        }
         vec3 c = floor(d * 240.0);
         float s = step(0.9975, hash(c));
         col += s * uStars * vec3(0.9, 0.95, 1.0) * smoothstep(0.08, 0.5, h) * (0.6 + 0.4 * sin(uTime * 2.0 + hash(c + 1.0) * 40.0));

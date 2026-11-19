@@ -228,6 +228,8 @@ export const lahore: CityDefinition = {
   },
   neon: [0xffa630, 0xff3355, 0xff6a1a, 0xffd23f],
   architecture: 'mughal',
+  // warm, soft and smoky
+  grade: { saturation: 0.04, contrast: -0.04, bloom: 1.0 },
   trafficMix: { tonga: 0.2, rickshaw: 0.32, bike: 0.28, car: 0.14, bus: 0.06 },
   skyLanes: 1,
   skylineGap: [-Math.PI * 0.75 - 0.55, -Math.PI * 0.75 + 0.55],

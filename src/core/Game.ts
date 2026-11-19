@@ -219,7 +219,7 @@ export class Game {
     this.physics.timestep = FIXED_DT;
     this.events = new RAPIER.EventQueue(true);
 
-    this.scene.environment = makeNeonEnvironment(this.renderer, this.city.neon, new THREE.Color(this.city.sky.zenith).lerp(new THREE.Color(this.city.fog.color), 0.35).getHex());
+    this.scene.environment = makeNeonEnvironment(this.renderer, this.city.neon, new THREE.Color(this.city.sky.zenith).lerp(new THREE.Color(this.city.fog.color), 0.35).getHex(), this.city.envGlow ?? 1);
     // ?world=test loads the Phase 1 proving ground instead of the city
     const testTrack = new URLSearchParams(location.search).get('world') === 'test';
     this.world = testTrack ? buildTestTrack(this.physics, q) : await buildCity(this.physics, q, this.city);
@@ -229,6 +229,11 @@ export class Game {
     this.scene.fog = new THREE.FogExp2(this.world.fogColor, this.world.fogDensity);
     this.scene.background = this.world.fogColor;
     this.baseFog = this.world.fogDensity;
+    // some cities greet you with their weather already on
+    if (!testTrack && this.city.rain) {
+      this.rain.target = this.city.rain;
+      this.rain.amount = this.city.rain;
+    }
     this.scene.add(this.rain.mesh);
 
     this.vehicle = new Vehicle(this.physics, vehicleConfig, this.world.spawn);
@@ -499,7 +504,7 @@ export class Game {
     this.scene.add(this.fx.group);
     this.camera.add(this.fx.speedLines.mesh);
     this.post?.dispose();
-    this.post = new PostFX(this.renderer, this.scene, this.camera, q);
+    this.post = new PostFX(this.renderer, this.scene, this.camera, q, this.world?.routes ? this.city.grade : undefined);
   }
 
   setQuality(level: QualityLevel) {

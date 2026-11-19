@@ -35,7 +35,7 @@ export async function buildCity(world: RAPIER.World, quality: QualitySettings, d
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(G, G),
     new THREE.MeshStandardMaterial({
-      map: gt.map, color: 0x5a5046, roughness: 0.95, metalness: 0, envMapIntensity: 0.15,
+      map: gt.map, color: def.ground ?? 0x5a5046, roughness: 0.95, metalness: 0, envMapIntensity: 0.15,
     }),
   );
   ground.rotation.x = -Math.PI / 2;
@@ -185,6 +185,7 @@ export async function buildCity(world: RAPIER.World, quality: QualitySettings, d
   const sky = makeAtmosphereSky({
     horizon: new THREE.Color(def.sky.horizon), mid: new THREE.Color(atm.skyMid), zenith: new THREE.Color(def.sky.zenith),
     sunDir, sunColor: sunColor.clone().multiplyScalar(0.35 + atm.daylight), sunSize: atm.sun.size, stars: atm.stars,
+    clouds: atm.clouds ? { cover: atm.clouds.cover, color: new THREE.Color(atm.clouds.color) } : undefined,
   });
   group.add(sky);
   group.add(new THREE.HemisphereLight(atm.hemi.sky, atm.hemi.ground, atm.hemi.intensity));

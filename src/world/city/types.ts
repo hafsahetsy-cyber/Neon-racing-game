@@ -47,7 +47,21 @@ export interface CityDefinition {
   /** Time of day, sky and air — the first thing that tells two cities apart. */
   atmosphere: Atmosphere;
   /** Which family of facades and rooftops the building generator draws. */
-  architecture: 'colonial' | 'mughal' | 'gulf';
+  architecture: 'colonial' | 'mughal' | 'gulf' | 'victorian';
+  /** The final colour grade: how saturated, contrasty and glowy this city is on screen. */
+  grade?: { saturation: number; contrast: number; brightness?: number; bloom: number };
+  /** 0..1 rain falling when the player arrives. */
+  rain?: number;
+  /** Multiplier on how many neon shop signs hang over the streets (default 1). */
+  signDensity?: number;
+  /** Strength of the animated hologram advertising on megatowers (default 1, 0 = none). */
+  holoAds?: number;
+  /** How strongly the city's neon shows up in reflections on wet roads and chrome (default 1). */
+  envGlow?: number;
+  /** Colour of open ground and paving between the roads. */
+  ground?: number;
+  /** Colour of the lit trim on heritage buildings (defaults to the first neon colour). */
+  trimColor?: number;
   /** Colours for the map's own water (creek, harbour), if it has any. */
   water?: { deep: number; glint: number; grip: number };
   /** Push the city limits outward on a side (metres) to make room for terrain beyond the map. */
@@ -78,7 +92,7 @@ export interface CityDefinition {
   landmarks: Record<string, LandmarkBuilder>;
 }
 
-export type TrafficKind = 'bus' | 'rickshaw' | 'car' | 'bike' | 'tonga';
+export type TrafficKind = 'bus' | 'rickshaw' | 'car' | 'bike' | 'tonga' | 'cab' | 'decker';
 
 export interface Atmosphere {
   /** 0 = deep night … 1 = full daylight on the facades. */
@@ -94,6 +108,8 @@ export interface Atmosphere {
   ambient: number;
   /** Glowing halos round street lamps (0 = clear air … 1 = thick smog). */
   halo: number;
+  /** Cloud layer: how much of the sky it covers (0..1) and its colour. */
+  clouds?: { cover: number; color: number };
   /** 0..1 heat shimmer along the horizon. */
   shimmer?: number;
   /** How much the fog slowly thickens and thins (sea fog rolling in). */

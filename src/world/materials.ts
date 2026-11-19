@@ -4,13 +4,19 @@ import * as THREE from 'three';
  * Instanced tower material: procedural lit windows computed in world space, so one
  * unit box can be scaled to any size without stretching. Reused by every city.
  */
-export function makeTowerMaterial(fogColor: THREE.Color, fogDensity: number, ambient = new THREE.Color(0)) {
+export function makeTowerMaterial(
+  fogColor: THREE.Color, fogDensity: number, ambient = new THREE.Color(0),
+  style: { neon: number; lit: number; body?: number } = { neon: 1, lit: 0.38 },
+) {
   return new THREE.ShaderMaterial({
     uniforms: {
       uFogColor: { value: fogColor },
       uFogDensity: { value: fogDensity },
       uTime: { value: 0 },
       uAmbient: { value: ambient },
+      uNeon: { value: style.neon },
+      uLit: { value: style.lit },
+      uBody: { value: new THREE.Color(style.body ?? 0x030306) },
     },
     vertexShader: /* glsl */ `
       varying vec3 vWorld;
@@ -34,6 +40,9 @@ export function makeTowerMaterial(fogColor: THREE.Color, fogDensity: number, amb
       uniform float uFogDensity;
       uniform float uTime;
       uniform vec3 uAmbient;
+      uniform float uNeon;
+      uniform float uLit;
+      uniform vec3 uBody;
       varying vec3 vWorld;
       varying vec3 vNormalW;
       varying vec3 vTint;
@@ -42,7 +51,7 @@ export function makeTowerMaterial(fogColor: THREE.Color, fogDensity: number, amb
       float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       void main() {
         vec3 n = normalize(vNormalW);
-        vec3 col = vec3(0.012, 0.012, 0.022) + uAmbient * (0.5 + 0.5 * abs(n.x));
+        vec3 col = uBody * (0.8 + 0.4 * vSeed) + uAmbient * (0.5 + 0.5 * abs(n.x));
         if (abs(n.y) < 0.5) {
           float h = abs(n.x) > 0.5 ? vWorld.z : vWorld.x;
           vec2 g = vec2(h / 4.0, vWorld.y / 4.5);
@@ -50,16 +59,18 @@ export function makeTowerMaterial(fogColor: THREE.Color, fogDensity: number, amb
           vec2 f = fract(g);
           float win = step(0.18, f.x) * step(f.x, 0.82) * step(0.25, f.y) * step(f.y, 0.78);
           float r = hash(cell + vSeed * 91.0);
-          float lit = step(0.62, r);
-          vec3 wcol = mix(vTint, vec3(1.0, 0.82, 0.55), step(0.9, r));
-          col += win * lit * wcol * (0.9 + 1.6 * fract(r * 7.0));
+          float lit = step(1.0 - uLit, r);
+          // plain office light (warm or fluorescent) unless the city wants neon
+          vec3 plain = mix(vec3(1.0, 0.86, 0.62), vec3(0.85, 0.92, 1.0), step(0.5, fract(r * 13.0)));
+          vec3 wcol = mix(plain, mix(vTint, vec3(1.0, 0.82, 0.55), step(0.9, r)), uNeon);
+          col += win * lit * wcol * (0.9 + 1.6 * fract(r * 7.0)) * mix(0.55, 1.0, uNeon);
           // glowing floor bands every so often
           float band = step(0.93, hash(vec2(cell.y, vSeed * 17.0))) * step(f.y, 0.2);
-          col += band * vTint * 2.2;
+          col += band * vTint * 2.2 * uNeon;
           // vertical neon edge
           float edge = step(0.92, hash(vec2(vSeed * 5.0, 3.0))) * step(0.5, hash(vec2(cell.x, vSeed)))
                      * step(f.x, 0.08);
-          col += edge * vTint * 2.5;
+          col += edge * vTint * 2.5 * uNeon;
         }
         float fog = 1.0 - exp(-uFogDensity * uFogDensity * vDepth * vDepth);
         col = mix(col, uFogColor, clamp(fog, 0.0, 1.0));

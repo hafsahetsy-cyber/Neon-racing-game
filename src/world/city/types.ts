@@ -56,6 +56,13 @@ export interface CityDefinition {
   signDensity?: number;
   /** Strength of the animated hologram advertising on megatowers (default 1, 0 = none). */
   holoAds?: number;
+  /**
+   * How tall buildings and the far skyline read. `neon` 0 gives plain glass-and-stone towers with
+   * ordinary office light; 1 gives the full cyberpunk treatment. `lit` is the share of lit windows.
+   */
+  towers?: { neon: number; lit: number; body?: number };
+  /** Street lamp design: tall modern arms, or short cast-iron lanterns at the kerb. */
+  lamps?: 'modern' | 'victorian';
   /** How strongly the city's neon shows up in reflections on wet roads and chrome (default 1). */
   envGlow?: number;
   /** Colour of open ground and paving between the roads. */

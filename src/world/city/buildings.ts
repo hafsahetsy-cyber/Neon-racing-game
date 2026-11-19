@@ -19,6 +19,8 @@ uniform vec3 uTrim;
 uniform float uDay;
 uniform float uArch;
 uniform float uHolo;
+uniform float uNeonK;
+uniform float uLitK;
 varying vec2 vUv;
 varying vec4 vInfo;
 varying vec3 vColor;
@@ -168,8 +170,14 @@ void main() {
     vec2 cell = floor(g), f = fract(g);
     float win = step(0.15, f.x) * step(f.x, 0.85) * step(0.25, f.y) * step(f.y, 0.8);
     float r = hash(cell + seed * 91.0);
-    col += win * step(0.6, r) * mix(vColor, vec3(1.0, 0.82, 0.55), step(0.9, r)) * (0.8 + 1.5 * fract(r * 7.0));
-    col += step(0.93, hash(vec2(cell.y, seed * 17.0))) * step(f.y, 0.2) * vColor * 2.4;
+    // curtain wall: grey glass catching the sky between thin mullions (shows through when neon is low)
+    float mull = 1.0 - step(0.06, f.x) * step(f.x, 0.94) * step(0.05, f.y) * step(f.y, 0.95);
+    vec3 curtain = mix(vec3(0.08, 0.1, 0.13) * (0.4 + 2.2 * uDay) * (0.85 + 0.3 * hash(vec2(cell.x, seed))), vec3(0.18, 0.19, 0.21) * (0.2 + day * 2.0), mull);
+    col = mix(curtain, col, uNeonK);
+    vec3 plain = mix(vec3(1.0, 0.86, 0.62), vec3(0.85, 0.92, 1.0), step(0.5, fract(r * 13.0)));
+    vec3 wcol = mix(plain, mix(vColor, vec3(1.0, 0.82, 0.55), step(0.9, r)), uNeonK);
+    col += win * step(1.0 - uLitK, r) * wcol * (0.8 + 1.5 * fract(r * 7.0)) * mix(0.6, 1.0, uNeonK);
+    col += step(0.93, hash(vec2(cell.y, seed * 17.0))) * step(f.y, 0.2) * vColor * 2.4 * uNeonK;
     // animated holographic advertising wall
     float face = floor(uv.x / 40.0);
     float pr = hash(vec2(face, seed * 5.0));
@@ -179,7 +187,7 @@ void main() {
     float scan = 0.7 + 0.3 * sin(uv.y * 3.0 - uTime * 6.0);
     float pattern = step(0.5, hash(floor(vec2(pp.x * 10.0, pp.y * 14.0 + floor(uTime * 0.8 + pr * 10.0)))));
     col = mix(col, holo * scan * (0.5 + 1.5 * pattern) * 1.3, panel);
-    col += vColor * 0.3 * exp(-uv.y / 14.0);
+    col += vColor * 0.3 * exp(-uv.y / 14.0) * uNeonK;
   } else if (style < 2.5) {
     // ---- heritage sandstone: arcades, warm floodlights, one neon line of trim
     vec3 stone = uStone * (0.82 + 0.36 * hash(vec2(floor(uv.x / 0.9), floor(uv.y / 0.45)) + seed));
@@ -383,6 +391,8 @@ export function buildBuildings(
       uSunDir: { value: new THREE.Vector3(...def.atmosphere.sun.dir).normalize() },
       uTrim: { value: new THREE.Color(def.trimColor ?? def.neon[0]) },
       uHolo: { value: def.holoAds ?? 1 },
+      uNeonK: { value: def.towers?.neon ?? 1 },
+      uLitK: { value: def.towers?.lit ?? 0.4 },
       uDay: { value: def.atmosphere.daylight },
       uArch: { value: { colonial: 0, mughal: 1, gulf: 2, victorian: 3 }[def.architecture] },
     },

@@ -228,6 +228,8 @@ export const lahore: CityDefinition = {
   },
   neon: [0xffa630, 0xff3355, 0xff6a1a, 0xffd23f],
   architecture: 'mughal',
+  // towers glow, but warmly and with fewer neon bands than Karachi
+  towers: { neon: 0.55, lit: 0.36, body: 0x1a0e0c },
   // warm, soft and smoky
   grade: { saturation: 0.04, contrast: -0.04, bloom: 1.0 },
   trafficMix: { tonga: 0.2, rickshaw: 0.32, bike: 0.28, car: 0.14, bus: 0.06 },

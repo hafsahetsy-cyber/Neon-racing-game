@@ -136,8 +136,6 @@ function dome(ctx: LandmarkContext) {
   ];
   ctx.addFootprint(rect(0, 0, 34, 120), 30, 2); // nave and choir
   ctx.addFootprint(rect(0, 4, 76, 34), 30, 2); // transepts
-  ctx.addFootprint(rect(-15, -56, 12, 12), 58, 2); // west towers
-  ctx.addFootprint(rect(15, -56, 12, 12), 58, 2);
   const g = ctx.group;
   const stone = new THREE.MeshStandardMaterial({ color: 0xd8d2c4, roughness: 0.65, emissive: 0xfff0d8, emissiveIntensity: 0.14 });
   const lead = new THREE.MeshStandardMaterial({ color: 0x7c8a94, roughness: 0.4, metalness: 0.35, emissive: 0x9fc0e0, emissiveIntensity: 0.1 });
@@ -171,11 +169,41 @@ function dome(ctx: LandmarkContext) {
   trim.rotation.x = Math.PI / 2;
   trim.position.set(0, 47.1, 4);
   g.add(trim);
+  // west towers: square stone stages, open belfries, and lead cupolas
+  const dark = new THREE.MeshBasicMaterial({ color: 0x0b0c10 });
   for (const x of [-15, 15]) {
-    const top = new THREE.Mesh(new THREE.SphereGeometry(5, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), lead);
-    top.position.set(x, 58, -56);
-    top.scale.y = 1.5;
+    const z = -56;
+    const stages: [number, number, number][] = [[12, 30, 15], [10.4, 12, 36], [8.6, 10, 47]]; // width, height, centre y
+    for (const [w, h, y] of stages) {
+      const s = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), stone);
+      s.position.set(x, y, z);
+      g.add(s);
+      const cornice = new THREE.Mesh(new THREE.BoxGeometry(w + 0.8, 0.6, w + 0.8), stone);
+      cornice.position.set(x, y + h / 2, z);
+      g.add(cornice);
+    }
+    // tall arched belfry openings on all four faces
+    for (let i = 0; i < 4; i++) {
+      const a = (i * Math.PI) / 2;
+      for (const off of [-2, 2]) {
+        const hole = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 6.5), dark);
+        hole.position.set(x + Math.sin(a) * 5.22 + Math.cos(a) * off, 36, z + Math.cos(a) * 5.22 - Math.sin(a) * off);
+        hole.rotation.y = a;
+        g.add(hole);
+      }
+      const dial = new THREE.Mesh(new THREE.CircleGeometry(1.4, 24), glow(0xfff1cf, 1.8));
+      dial.position.set(x + Math.sin(a) * 4.32, 47, z + Math.cos(a) * 4.32);
+      dial.rotation.y = a;
+      g.add(dial);
+    }
+    const top = new THREE.Mesh(new THREE.SphereGeometry(4.2, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), lead);
+    top.position.set(x, 52.2, z);
+    top.scale.y = 1.6;
     g.add(top);
+    const pin = new THREE.Mesh(new THREE.BoxGeometry(0.25, 5, 0.25), glow(0xffc24a, 3));
+    pin.position.set(x, 61.5, z);
+    g.add(pin);
+    ctx.addBoxCollider(new THREE.Vector3(x, 26, z), new THREE.Vector3(12, 52, 12));
   }
 }
 
@@ -226,6 +254,9 @@ export const london: CityDefinition = {
   neon: [RED, WHITE, 0x4aa8ff, 0xffc24a],
   trimColor: 0xfff0d0,
   holoAds: 0,
+  // plain glass and stone, ordinary office light: no neon on the towers
+  towers: { neon: 0, lit: 0.2, body: 0x22262e },
+  lamps: 'victorian',
   envGlow: 0.12, // wet roads reflect grey sky, not neon
   ground: 0x2c2e33,
   signDensity: 0.28,

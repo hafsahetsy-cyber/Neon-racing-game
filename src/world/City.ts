@@ -157,7 +157,7 @@ export async function buildCity(world: RAPIER.World, quality: QualitySettings, d
   const atm = def.atmosphere;
   const sunDir = new THREE.Vector3(...atm.sun.dir).normalize();
   const sunColor = new THREE.Color(atm.sun.color);
-  const towerMat = makeTowerMaterial(fogColor, fogDensity * 0.3, sunColor.clone().multiplyScalar(0.16 * atm.daylight));
+  const towerMat = makeTowerMaterial(fogColor, fogDensity * 0.3, sunColor.clone().multiplyScalar(0.16 * atm.daylight), def.towers);
   const towers = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), towerMat, quality.skyline);
   const tints = def.neon;
   let seed = 7;

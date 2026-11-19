@@ -105,18 +105,31 @@ export function buildProps(
   const street = new THREE.Color(def.streetLight);
 
   // ------------------------------------------------------------ street lights (main roads)
-  const lightGeo = mergeGeometries([
-    colorBox(0.2, 9, 0.2, 0, 4.5, 0, 0x0b0b0e),
-    colorBox(2.8, 0.12, 0.12, 1.3, 8.95, 0, 0x0b0b0e),
-    colorBox(1.1, 0.1, 0.36, 2.3, 8.85, 0, street, 5),
-  ]);
+  const victorian = def.lamps === 'victorian';
+  const lightGeo = victorian
+    ? // cast-iron column with a fluted base, a crossbar, and a four-sided glass lantern
+      mergeGeometries([
+        colorBox(0.42, 0.7, 0.42, 0, 0.35, 0, 0x101214),
+        colorBox(0.3, 0.2, 0.3, 0, 0.8, 0, 0x101214),
+        colorBox(0.14, 3.6, 0.14, 0, 2.6, 0, 0x101214),
+        colorBox(0.7, 0.08, 0.08, 0, 4.2, 0, 0x101214),
+        colorBox(0.34, 0.12, 0.34, 0, 4.42, 0, 0x101214),
+        colorBox(0.36, 0.6, 0.36, 0, 4.8, 0, street, 3.2),
+        colorBox(0.46, 0.08, 0.46, 0, 5.14, 0, 0x101214),
+        colorBox(0.08, 0.3, 0.08, 0, 5.32, 0, 0x101214),
+      ])
+    : mergeGeometries([
+        colorBox(0.2, 9, 0.2, 0, 4.5, 0, 0x0b0b0e),
+        colorBox(2.8, 0.12, 0.12, 1.3, 8.95, 0, 0x0b0b0e),
+        colorBox(1.1, 0.1, 0.36, 2.3, 8.85, 0, street, 5),
+      ]);
   const lights: THREE.Matrix4[] = [];
   const pools: { x: number; z: number; s: number; c: THREE.Color }[] = [];
   const lamps: number[] = [];
   map.roads.forEach((r, ri) => {
     if (r.c > 3) return;
     let i = 0;
-    walkPolyline(r.p, 42, 14, (x, z, dx, dz) => {
+    walkPolyline(r.p, victorian ? 24 : 42, 14, (x, z, dx, dz) => {
       const side = r.o ? -1 : i++ % 2 ? 1 : -1;
       const nx = -dz * side, nz = dx * side;
       const px = x + nx * (r.w / 2 + 1), pz = z + nz * (r.w / 2 + 1);
@@ -124,8 +137,14 @@ export function buildProps(
       // local +X must point back at the carriageway
       quat.setFromAxisAngle(UP, Math.atan2(nz, -nx));
       lights.push(new THREE.Matrix4().compose(v.set(px, 0, pz), quat, one));
-      lamps.push(px - nx * 2.3, 8.85, pz - nz * 2.3);
-      pools.push({ x: x + nx * (r.w / 2 - 2.2), z: z + nz * (r.w / 2 - 2.2), s: 24, c: street.clone().multiplyScalar(0.42) });
+      if (victorian) {
+        // short lanterns: light falls in a small pool round the foot of the post
+        lamps.push(px, 4.8, pz);
+        pools.push({ x: px - nx * 1.2, z: pz - nz * 1.2, s: 13, c: street.clone().multiplyScalar(0.36) });
+      } else {
+        lamps.push(px - nx * 2.3, 8.85, pz - nz * 2.3);
+        pools.push({ x: x + nx * (r.w / 2 - 2.2), z: z + nz * (r.w / 2 - 2.2), s: 24, c: street.clone().multiplyScalar(0.42) });
+      }
     });
   });
   const lightMesh = new THREE.InstancedMesh(lightGeo, new THREE.MeshBasicMaterial({ vertexColors: true }), lights.length);
@@ -139,7 +158,7 @@ export function buildProps(
     const halos = new THREE.Points(
       hg,
       new THREE.PointsMaterial({
-        map: makeGlowTexture(), color: street.clone().multiplyScalar(0.55 * def.atmosphere.halo), size: 7 + 9 * def.atmosphere.halo,
+        map: makeGlowTexture(), color: street.clone().multiplyScalar(0.55 * def.atmosphere.halo), size: (victorian ? 0.6 : 1) * (7 + 9 * def.atmosphere.halo),
         sizeAttenuation: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
       }),
     );
